@@ -80,7 +80,7 @@ def lookup_tag(tag_number):
     return np.array(tag_pos)
 
 
-def get_trajectory(limb, kin, ik_solver, tag_pos, args):
+def get_trajectory(limb, kin, ik_solver, tag_pos, goal_offset, args):
     """
     Returns an appropriate robot trajectory for the specified task.  You should
     be implementing the path functions in paths.py and call them here
@@ -114,8 +114,9 @@ def get_trajectory(limb, kin, ik_solver, tag_pos, args):
     print("Current Position:", current_position)
 
     target_pos = tag_pos[0]
-    target_pos[2] += 0.3  # z - above AR tag
-    target_pos[1] += 0.0  # x - a little to the side
+    print("target_pos", target_pos)
+    target_pos += goal_offset
+
     print("TARGET POSITION:", target_pos)
     trajectory = LinearTrajectory(
         start_position=current_position,
@@ -225,7 +226,11 @@ def main():
     # positions and velocities are workspace positions and velocities.  If the controller
     # is a jointspace or torque controller, it should return a trajectory where the positions
     # and velocities are the positions and velocities of each joint.
-    robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, args)
+
+    #  x forward/back, y right/left, z up/down
+    # goal_offset = np.array([0.5, 0.5, 0.3])
+    goal_offset = np.array([0.2, 0.2, 0.3])
+    robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, goal_offset, args)
 
     # This is a wrapper around MoveIt! for you to use.  We use MoveIt! to go to the start position
     # of the trajectory
