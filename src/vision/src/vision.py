@@ -40,6 +40,27 @@ def find_contours(image):
 
     return final_contours
 
+def grayworld_assumption(im):
+    wb_im = cv2.cvtColor(im, cv2.COLOR_BGR2LAB)
+    avg_a = np.median(wb_im[:, :, 1])
+    avg_b = np.median(wb_im[:, :, 2])
+    # print(avg_a)
+    # print(avg_b)
+    # print(wb_im.shape)
+    a_delta = (avg_a - 128) * (wb_im[:, :, 0] / 255) * 1.1
+    b_delta = (avg_b - 128) * (wb_im[:, :, 1] / 255) * 1.1
+    wb_im[:, :, 1] = wb_im[:, :, 1] - a_delta
+    wb_im[:, :, 2] = wb_im[:, :, 2] - b_delta
+    return cv2.cvtColor(wb_im, cv2.COLOR_LAB2BGR)
+   
+def yen_thresholded_wb(im):
+    wb_im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    print(wb_im)
+    yen = sk.filters.threshold_yen(wb_im)
+    print(yen)
+    result = sk.exposure.rescale_intensity(im, (0, yen + 50), (0, 255)).astype(np.uint8)
+    result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+    return result
 
 def detect_cards(image):
     contours = find_contours(image)
@@ -93,8 +114,8 @@ def detect_cards(image):
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
         dst = cv2.warpPerspective(image, M, (180, 300))
-
-        dst = sk.exposure.adjust_gamma(dst)
+        dst = grayworld_assumption(dst)
+        dst = yen_thresholded_wb(dst)
         rectified_cards.append(dst)
 
 
@@ -105,6 +126,7 @@ def detect_cards(image):
     output_cards = cv2.cvtColor(sk.util.montage(rectified_cards, channel_axis=-1, fill=[0, 0, 0], rescale_intensity=True), cv2.COLOR_BGR2RGB)
     plt.subplot(122)
     plt.imshow(output_cards)
+    #plt.imshow(rectified_cards[1])
     plt.show()
 
 
