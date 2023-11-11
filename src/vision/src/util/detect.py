@@ -60,9 +60,24 @@ def yen_thresholded_wb(im):
     return result
 
 
-def detect_cards(image):
-    contours = find_contours(image)
+def reduce_bitdepth(im, bins):
+    image = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    image = sk.util.img_as_float(image)
+    for channel in range(3):
+        image[:, :, channel] = sk.exposure.rescale_intensity(image[:, :, channel], out_range=(0, 1))
 
+    bins = np.linspace(0, 1, num=bins+1)
+    centers = (bins[:-1] + bins[1:]) / 2
+
+    indices = np.digitize(image, centers)
+    reduced = bins[indices]
+
+    result = sk.util.img_as_uint(reduced).astype(np.uint8)
+    result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+    return result
+
+
+def detect_cards(image, contours):
     # rectify images
     rectified_cards = []
     for contour in contours:
@@ -103,8 +118,10 @@ def detect_cards(image):
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
         dst = cv2.warpPerspective(image, M, (180, 300))
-        dst = grayworld_assumption(dst)
-        dst = yen_thresholded_wb(dst)
+        # dst = grayworld_assumption(dst)
+        # dst = yen_thresholded_wb(dst)
+        dst = cv2.GaussianBlur(dst, (7, 7), 3)
+        dst = reduce_bitdepth(dst, 2)
         rectified_cards.append(dst)
 
     return rectified_cards
