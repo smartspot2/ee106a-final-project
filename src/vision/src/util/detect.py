@@ -1,7 +1,9 @@
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.stats
 import skimage as sk
+from sklearn.cluster import KMeans
 
 
 def find_contours(image):
@@ -62,22 +64,29 @@ def yen_thresholded_wb(im):
 
 def reduce_bitdepth(im, bins):
     image = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-    image = sk.util.img_as_float(image)
-    for channel in range(3):
-        image[:, :, channel] = sk.exposure.rescale_intensity(image[:, :, channel], out_range=(0, 1))
+    image = sk.exposure.rescale_intensity(sk.util.img_as_float(image), out_range=(0, 1))
 
-    bins = np.linspace(0, 1, num=bins+1)
-    centers = (bins[:-1] + bins[1:]) / 2
+    # run k-means clustering to reduce bit-depth
+    kmeans = KMeans(bins, n_init="auto")
+    # flatten image and fit kmeans
+    reduced_idx = kmeans.fit_predict(image.reshape(-1, 3))
+    # use the closest cluster as the new color
+    reduced = kmeans.cluster_centers_[reduced_idx]
 
-    indices = np.digitize(image, centers)
-    reduced = bins[indices]
+    # use the most common as the background
+    most_common_idx = scipy.stats.mode(reduced_idx)[0]
+    background_mask = reduced_idx == most_common_idx
+    reduced[background_mask] = 1
 
-    result = sk.util.img_as_uint(reduced).astype(np.uint8)
+    reduced = reduced.reshape(image.shape)
+
+    result = sk.util.img_as_ubyte(reduced).astype(np.uint8)
     result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
     return result
 
 
-def detect_cards(image, contours):
+def detect_cards(image, contours, card_shape=(180, 280)):
+    card_width, card_height = card_shape
     # rectify images
     rectified_cards = []
     for contour in contours:
@@ -110,18 +119,19 @@ def detect_cards(image, contours):
         rectified_target = np.array(
             [
                 [0, 0],
-                [0, 300],
-                [180, 300],
-                [180, 0],
+                [0, card_height],
+                [card_width, card_height],
+                [card_width, 0],
             ]
         ).astype(np.float32)
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
-        dst = cv2.warpPerspective(image, M, (180, 300))
+        dst = cv2.warpPerspective(image, M, card_shape)
         # dst = grayworld_assumption(dst)
         # dst = yen_thresholded_wb(dst)
-        dst = cv2.GaussianBlur(dst, (7, 7), 3)
-        dst = reduce_bitdepth(dst, 2)
+        dst = cv2.GaussianBlur(dst, (7, 7), 1)
+        dst = reduce_bitdepth(dst, 3)
+        # dst = segment(dst, 50)
         rectified_cards.append(dst)
 
     return rectified_cards

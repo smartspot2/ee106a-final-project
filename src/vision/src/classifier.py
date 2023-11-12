@@ -4,13 +4,18 @@
 Main class for training/running the classifier NN.
 """
 
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import skimage as sk
 import torch
 import tqdm
 import util
+from PIL import Image
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SequentialSampler, WeightedRandomSampler
+from torchinfo import summary
 from torchvision.transforms.v2 import (
     ColorJitter,
     Compose,
@@ -25,7 +30,11 @@ from util import torch_util
 
 
 def train(args):
-    model = util.nn.CardClassifier().to(torch_util.device)
+    if args.use_resnet:
+        model = util.nn.CardClassifierResnet().to(torch_util.device)
+    else:
+        model = util.nn.CardClassifier().to(torch_util.device)
+
     if args.start_model is not None:
         model.load_state_dict(torch.load(args.start_model))
 
@@ -35,9 +44,9 @@ def train(args):
             ToDtype(torch.float, scale=True),
             RandomOrder(
                 [
-                    RandomResizedCrop(size=(280, 180), scale=(0.75, 1), antialias=True),
+                    RandomResizedCrop(size=(280, 180), scale=(0.95, 1), antialias=True),
                     RandomRotation(
-                        degrees=(-20, 20),
+                        degrees=(-10, 10),
                         interpolation=InterpolationMode.BILINEAR,
                         fill=1,
                     ),
@@ -51,11 +60,15 @@ def train(args):
     eval_dataset = util.nn.CardData(args.image_dir, transform=eval_transform)
 
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
-    eval_dataloader = DataLoader(dataset, batch_size=args.eval_batch_size)
+    eval_dataloader = DataLoader(eval_dataset, batch_size=args.eval_batch_size)
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer, gamma=args.learning_rate_gamma
+    )
 
+    best_eval_accuracy = 0
     for epoch in tqdm.trange(args.num_epochs):
         losses = []
         model.train()
@@ -72,10 +85,12 @@ def train(args):
             optimizer.step()
 
             losses.append(loss.item())
+        scheduler.step()
 
         mean_loss = np.mean(losses)
         if args.wandb:
             util.log.log_scalar(epoch, "train_loss", mean_loss)
+            util.log.log_scalar(epoch, "lr", scheduler.get_last_lr()[0])
         else:
             print("loss:", mean_loss)
 
@@ -99,18 +114,25 @@ def train(args):
         else:
             print("accuracy:", accuracy)
 
-        torch.save(model.state_dict(), args.model_file)
+        # save the model if we get a new best
+        if accuracy >= best_eval_accuracy:
+            best_eval_accuracy = accuracy
+            torch.save(model.state_dict(), args.model_file)
 
 
 def run(args):
     """
     Run a saved model on a given input image.
     """
-    # from torchinfo import summary
 
-    model = util.nn.CardClassifier().to(torch_util.device)
+    if args.use_resnet:
+        model = util.nn.CardClassifierResnet().to(torch_util.device)
+    else:
+        model = util.nn.CardClassifier().to(torch_util.device)
     model.load_state_dict(torch.load(args.model_file))
-    # summary(model, input_size=(1, 3, 280, 180))
+
+    if args.summary:
+        summary(model, input_size=(1, 3, 280, 180))
 
     raw_image = sk.util.img_as_float(sk.io.imread(args.image)).astype(np.float32)
     image = torch.tensor(raw_image).to(torch_util.device)
@@ -118,11 +140,49 @@ def run(args):
     # torch expects (channels, height, width)
     input_image = image.moveaxis((0, 1, 2), (1, 2, 0))[None, ...]
 
+    model.eval()
     pred_logits = model(input_image)
-    pred = torch.argmax(pred_logits).item()
+    pred = torch.argmax(pred_logits[0]).item()
 
     string_label = util.nn.label_to_string(*util.nn.deserialize_label(pred))
     print(string_label)
+
+
+def eval(args):
+    """
+    Evaluate a saved model on all labeled images in a folder.
+    """
+    if args.use_resnet:
+        model = util.nn.CardClassifierResnet().to(torch_util.device)
+    else:
+        model = util.nn.CardClassifier().to(torch_util.device)
+    model.load_state_dict(torch.load(args.model_file))
+
+    eval_transform = Compose([ToImage(), ToDtype(torch.float, scale=True)])
+    eval_dataset = util.nn.CardData(args.image_dir, transform=eval_transform)
+    eval_dataloader = DataLoader(
+        eval_dataset,
+        batch_size=args.eval_batch_size,
+        shuffle=False,
+        sampler=SequentialSampler(eval_dataset),
+    )
+
+    model.eval()
+    with torch.no_grad():
+        total_correct = 0
+        for images, labels in tqdm.tqdm(eval_dataloader):
+            # move to designated device
+            images = images.to(torch_util.device)
+            labels = labels.to(torch_util.device)
+
+            output = model(images)
+            pred = output.argmax(1)
+
+            total_correct += (pred == labels).sum().item()
+
+        accuracy = total_correct / len(eval_dataset)
+
+    print("accuracy:", accuracy)
 
 
 def main(args):
@@ -134,6 +194,8 @@ def main(args):
         train(args)
     elif args.command == "run":
         run(args)
+    elif args.command == "eval":
+        eval(args)
 
 
 if __name__ == "__main__":
@@ -154,6 +216,7 @@ if __name__ == "__main__":
     train_parser.add_argument(
         "--start-model", default=None, help="Starting model state"
     )
+    train_parser.add_argument("--use-resnet", default=False, action="store_true")
 
     train_hyperparams = train_parser.add_argument_group("Hyperparameters")
 
@@ -166,6 +229,12 @@ if __name__ == "__main__":
     train_hyperparams.add_argument(
         "--learning-rate", default=1e-4, type=float, help="Learning rate"
     )
+    train_hyperparams.add_argument(
+        "--learning-rate-gamma",
+        default=0.99,
+        type=float,
+        help="Exponential learning rate schedule gamma",
+    )
 
     train_hyperparams.add_argument(
         "--eval-batch-size", default=128, type=int, help="Evaluation batch size"
@@ -174,5 +243,22 @@ if __name__ == "__main__":
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("model_file", help="Saved model file")
     run_parser.add_argument("image", help="Image to classify")
+    run_parser.add_argument("--use-resnet", default=False, action="store_true")
+    run_parser.add_argument(
+        "--summary",
+        default=False,
+        action="store_true",
+        help="Display a summary of the network",
+    )
+
+    eval_parser = subparsers.add_parser("eval")
+    eval_parser.add_argument(
+        "image_dir", help="Image directory for labeled training images"
+    )
+    eval_parser.add_argument("model_file", help="Saved model file")
+    eval_parser.add_argument("--use-resnet", default=False, action="store_true")
+    eval_parser.add_argument(
+        "--eval-batch-size", default=128, type=int, help="Evaluation batch size"
+    )
 
     main(parser.parse_args())

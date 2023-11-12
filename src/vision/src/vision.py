@@ -11,7 +11,7 @@ import skimage as sk
 import torch
 from util.classify import classify
 from util.detect import detect_cards, find_contours
-from util.nn import CardClassifier
+from util.nn import CardClassifier, CardClassifierResnet
 
 
 def main(args):
@@ -32,14 +32,21 @@ def main(args):
     # find cards
     cards = detect_cards(image, contours)
 
-    # classify cards
-    model = CardClassifier()
-    model.load_state_dict(torch.load(args.classifier_model))
+    if args.model:
+        # classify cards
+        if args.use_resnet:
+            model = CardClassifierResnet()
+        else:
+            model = CardClassifier()
+        model.load_state_dict(torch.load(args.model))
+        model.eval()
 
-    labels = []
-    for card in cards:
-        label = classify(model, card)
-        labels.append(label)
+        labels = []
+        for card in cards:
+            label = classify(model, card)
+            labels.append(label)
+    else:
+        labels = [""] * len(contours)
 
     # display
     output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
@@ -49,7 +56,9 @@ def main(args):
         moments = cv2.moments(contour)
         cx = moments["m10"] / moments["m00"]
         cy = moments["m01"] / moments["m00"]
-        plt.text(cx, cy, label.replace("-", "\n"), fontsize="small", ha="center", va="center")
+        plt.text(
+            cx, cy, label.replace("-", "\n"), fontsize="small", ha="center", va="center"
+        )
 
     output_cards = cv2.cvtColor(
         sk.util.montage(cards, channel_axis=-1, fill=[0, 0, 0], rescale_intensity=True),
@@ -68,7 +77,10 @@ if __name__ == "__main__":
 
     parser.add_argument("image", help="Input image")
     parser.add_argument(
-        "classifier_model", help="Model file to load for use as the card classifier"
+        "--model",
+        default=None,
+        help="Model file to load for use as the card classifier",
     )
+    parser.add_argument("--use-resnet", action="store_true")
 
     main(parser.parse_args())
