@@ -78,30 +78,30 @@ def reduce_bitdepth(im, bins):
     reduced = centers[reduced_idx]
 
     # use the most common as the background
-    most_common_idx = scipy.stats.mode(reduced_idx)[0]
+    most_common_idx = scipy.stats.mode(reduced_idx, keepdims=True)[0]
     background_mask = reduced_idx == most_common_idx
     reduced[background_mask] = 1
 
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    # fig = plt.figure()
+    # ax = fig.add_subplot(1, 1, 1, projection="3d")
 
-    for bin in range(bins):
-        vals = image.reshape(-1, 3)[reduced_idx == bin]
-        ax.scatter(
-            vals[:, 0],
-            vals[:, 1],
-            vals[:, 2],
-            marker="+",
-            c=tuple(centers[bin].flatten()),
-            alpha=0.2,
-        )
-    ax.scatter(
-        centers[:, 0],
-        centers[:, 1],
-        centers[:, 2],
-        c="black",
-    )
-    plt.show()
+    # for bin in range(bins):
+    #     vals = image.reshape(-1, 3)[reduced_idx == bin]
+    #     ax.scatter(
+    #         vals[:, 0],
+    #         vals[:, 1],
+    #         vals[:, 2],
+    #         marker="+",
+    #         c=tuple(centers[bin].flatten()),
+    #         alpha=0.2,
+    #     )
+    # ax.scatter(
+    #     centers[:, 0],
+    #     centers[:, 1],
+    #     centers[:, 2],
+    #     c="black",
+    # )
+    # plt.show()
 
     reduced = reduced.reshape(image.shape)
 

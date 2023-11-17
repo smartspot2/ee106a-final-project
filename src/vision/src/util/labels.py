@@ -1,6 +1,7 @@
 """
 Constants and utility functions for card labels.
 """
+from typing import Tuple
 
 
 SHAPES = ["oval", "squiggle", "diamond"]
@@ -30,7 +31,7 @@ def label_from_string(label: str) -> int:
     return shape_int * 27 + color_int * 9 + count_int * 3 + shade_int
 
 
-def deserialize_label(label: int) -> tuple[int, int, int, int]:
+def deserialize_label(label: int) -> Tuple[int, int, int, int]:
     """
     Deserialize a label from an int.
 
