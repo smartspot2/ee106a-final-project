@@ -56,7 +56,7 @@ add_message_files(
 add_service_files(
   FILES
   CardData.srv
-  Position.srv
+  TargetPosition.srv
   SolveSet.srv
 )
 
