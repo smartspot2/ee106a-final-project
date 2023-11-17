@@ -12,6 +12,7 @@ import torch
 from util.classify import classify
 from util.detect import detect_cards, find_contours
 from util.nn import CardClassifier, CardClassifierResnet
+from util.set import find_set
 
 
 def main(args):
@@ -19,15 +20,6 @@ def main(args):
 
     # find contours
     contours = find_contours(image)
-
-    output = image.copy()
-    for idx in range(len(contours)):
-        rgb = (
-            np.random.randint(0, 255),
-            np.random.randint(0, 255),
-            np.random.randint(0, 255),
-        )
-        output = cv2.drawContours(output, contours, idx, rgb, 2, cv2.LINE_8)
 
     # find cards
     cards = detect_cards(image, contours)
@@ -45,11 +37,28 @@ def main(args):
         for card in cards:
             label = classify(model, card)
             labels.append(label)
+
+        # find the set
+        found_set = find_set(labels)
     else:
         labels = [""] * len(contours)
+        found_set = None
 
-    # display
+    # ===== display =====
+
+    # draw contours
+    output = image.copy()
+    for idx, (card, contour) in enumerate(zip(cards, contours)):
+        if found_set is not None and idx in found_set:
+            # part of set
+            rgb = (0, 255, 0)
+        else:
+            # not part of set
+            rgb = (255, 0, 0)
+
+        output = cv2.drawContours(output, contours, idx, rgb, 2, cv2.LINE_8)
     output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+
     plt.subplot(121)
     plt.imshow(output)
     for contour, label in zip(contours, labels):
@@ -60,6 +69,7 @@ def main(args):
             cx, cy, label.replace("-", "\n"), fontsize="small", ha="center", va="center"
         )
 
+    # draw card preview
     output_cards = cv2.cvtColor(
         sk.util.montage(cards, channel_axis=-1, fill=[0, 0, 0], rescale_intensity=True),
         cv2.COLOR_BGR2RGB,

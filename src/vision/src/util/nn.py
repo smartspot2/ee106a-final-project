@@ -10,6 +10,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 from torch import nn
 from torchvision.datasets import ImageFolder
 
+from .labels import label_from_string
+
 
 class CardClassifier(nn.Module):
     def __init__(self):
@@ -177,7 +179,7 @@ class CardData(ImageFolder):
             labels.add(label)
 
         # get the serialized form of each label
-        label_mapping = {l: serialize_label(l) for l in labels}
+        label_mapping = {l: label_from_string(l) for l in labels}
 
         return list(labels), label_mapping
 
@@ -210,57 +212,3 @@ class CardData(ImageFolder):
             dataset.append((full_file, idx))
 
         return dataset
-
-
-SHAPES = ["oval", "squiggle", "diamond"]
-COLORS = ["red", "purple", "green"]
-COUNTS = ["1", "2", "3"]
-SHADES = ["solid", "stripe", "outline"]
-
-
-def serialize_label(label: str) -> int:
-    """
-    Serialize a card label from a string.
-
-    Label must be of the form:
-        "{shape}-{color}-{count}-{shade}"
-    If duplicates, may have suffix "_{nonce}"
-
-    Serialization is a number in base 3 with the digits
-        (((shape) * 3 + color) * 3 + count) * 3 + shade
-    """
-    label = label.split("_")[0]
-    shape, color, count, shade = label.split("-")
-    shape_int = SHAPES.index(shape)
-    color_int = COLORS.index(color)
-    count_int = COUNTS.index(count)
-    shade_int = SHADES.index(shade)
-
-    return shape_int * 27 + color_int * 9 + count_int * 3 + shade_int
-
-
-def deserialize_label(label: int) -> tuple[int, int, int, int]:
-    """
-    Deserialize a label from an int.
-
-    label % 3 => shade
-    (label // 3) % 3 => count
-    (label // 9) % 3 => color
-    (label // 27) % 3 => shape
-    """
-
-    shade = label % 3
-    count = (label // 3) % 3
-    color = (label // 9) % 3
-    shape = (label // 27) % 3
-
-    return shape, color, count, shade
-
-
-def label_to_string(shape: int, color: int, count: int, shade: int) -> str:
-    shape_str = SHAPES[shape]
-    color_str = COLORS[color]
-    count_str = COUNTS[count]
-    shade_str = SHADES[shade]
-
-    return f"{shape_str}-{color_str}-{count_str}-{shade_str}"

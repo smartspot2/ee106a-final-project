@@ -4,22 +4,20 @@
 Main class for training/running the classifier NN.
 """
 
-import os
-
-import matplotlib.pyplot as plt
 import numpy as np
 import skimage as sk
 import torch
 import tqdm
 import util
-from PIL import Image
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler, WeightedRandomSampler
+from torch.utils.data import DataLoader, SequentialSampler
 from torchinfo import summary
 from torchvision.transforms.v2 import (
     ColorJitter,
     Compose,
+    GaussianBlur,
     InterpolationMode,
+    RandomApply,
     RandomOrder,
     RandomResizedCrop,
     RandomRotation,
@@ -44,14 +42,28 @@ def train(args):
             ToDtype(torch.float, scale=True),
             RandomOrder(
                 [
+                    # randomly resize and crop the image;
+                    # ensures robustness against different rectification noise
                     RandomResizedCrop(size=(280, 180), scale=(0.95, 1), antialias=True),
+                    # randomly rotate the image (filling with white)
+                    # ensures robustness against different rectification noise
                     RandomRotation(
                         degrees=(-10, 10),
                         interpolation=InterpolationMode.BILINEAR,
                         fill=1,
                     ),
+                    # randomly blur the image (and occasionally don't blur)
+                    # ensures robustness against image quality
+                    RandomApply(
+                        [
+                            GaussianBlur(kernel_size=7, sigma=(0.1, 3)),
+                        ],
+                        p=0.9,
+                    ),
                 ]
             ),
+            # randomly modify the brightness/contrast/saturation/hue of the image
+            # ensures robustness against environment conditions
             ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
         ]
     )
@@ -144,7 +156,7 @@ def run(args):
     pred_logits = model(input_image)
     pred = torch.argmax(pred_logits[0]).item()
 
-    string_label = util.nn.label_to_string(*util.nn.deserialize_label(pred))
+    string_label = util.labels.label_to_string(*util.labels.deserialize_label(pred))
     print(string_label)
 
 

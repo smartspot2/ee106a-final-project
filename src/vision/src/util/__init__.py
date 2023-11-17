@@ -1,2 +1,2 @@
-from . import detect, log, nn, torch_util
+from . import detect, labels, log, nn, torch_util
 

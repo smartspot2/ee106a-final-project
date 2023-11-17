@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
 import skimage as sk
-from sklearn.cluster import KMeans
+from mpl_toolkits.mplot3d import Axes3D
+from sklearn.cluster import AgglomerativeClustering, KMeans
 
 
 def find_contours(image):
@@ -69,14 +70,38 @@ def reduce_bitdepth(im, bins):
     # run k-means clustering to reduce bit-depth
     kmeans = KMeans(bins, n_init="auto")
     # flatten image and fit kmeans
-    reduced_idx = kmeans.fit_predict(image.reshape(-1, 3))
+    flat_image = image.reshape(-1, 3)
+    reduced_idx = kmeans.fit_predict(flat_image)
+    centers = kmeans.cluster_centers_
+
     # use the closest cluster as the new color
-    reduced = kmeans.cluster_centers_[reduced_idx]
+    reduced = centers[reduced_idx]
 
     # use the most common as the background
     most_common_idx = scipy.stats.mode(reduced_idx)[0]
     background_mask = reduced_idx == most_common_idx
     reduced[background_mask] = 1
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+
+    for bin in range(bins):
+        vals = image.reshape(-1, 3)[reduced_idx == bin]
+        ax.scatter(
+            vals[:, 0],
+            vals[:, 1],
+            vals[:, 2],
+            marker="+",
+            c=tuple(centers[bin].flatten()),
+            alpha=0.2,
+        )
+    ax.scatter(
+        centers[:, 0],
+        centers[:, 1],
+        centers[:, 2],
+        c="black",
+    )
+    plt.show()
 
     reduced = reduced.reshape(image.shape)
 
@@ -131,7 +156,6 @@ def detect_cards(image, contours, card_shape=(180, 280)):
         # dst = yen_thresholded_wb(dst)
         dst = cv2.GaussianBlur(dst, (7, 7), 1)
         dst = reduce_bitdepth(dst, 3)
-        # dst = segment(dst, 50)
         rectified_cards.append(dst)
 
     return rectified_cards

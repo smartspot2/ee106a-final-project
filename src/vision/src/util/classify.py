@@ -7,7 +7,7 @@ import cv2
 import skimage as sk
 import torch
 
-from . import nn
+from .labels import deserialize_label, label_to_string
 
 
 def classify(model, card) -> str:
@@ -26,5 +26,5 @@ def classify(model, card) -> str:
     pred = torch.argmax(pred_logits)
     pred = pred.item()
 
-    label = nn.label_to_string(*nn.deserialize_label(pred))
+    label = label_to_string(*deserialize_label(pred))
     return label
