@@ -28,7 +28,6 @@ class Controller:
         kin : :obj:`sawyer_pykdl.sawyer_kinematics`
             must be the same arm as limb
         """
-
         # Run the shutdown function when the ros node is shutdown
         rospy.on_shutdown(self.shutdown)
         self._limb = limb
@@ -36,6 +35,7 @@ class Controller:
 
         # Set this attribute to True if the present controller is a jointspace controller.
         self.is_joinstpace_controller = False
+
 
     def step_control(self, target_position, target_velocity, target_acceleration):
         """
@@ -169,7 +169,7 @@ class Controller:
         self._limb.set_joint_velocities(zero_vel_dict)
 
 
-    def execute_path(self, path, rate=200, timeout=None, log=False):
+    def execute_path(self, path, rate=200, timeout=None):
         """
         takes in a path and moves the sawyer in order to follow the path.
 
@@ -244,7 +244,6 @@ class FeedforwardJointVelocityController(Controller):
         target_velocity: 7x' ndarray of desired velocities
         target_acceleration: 7x' ndarray of desired accelerations
         """
-        # TODO: Implement Feedforward control
         controller_velocity = target_velocity
 
         self._limb.set_joint_velocities(
@@ -304,8 +303,6 @@ class PIDJointVelocityController(Controller):
         current_position = get_joint_positions(self._limb)
         current_velocity = get_joint_velocities(self._limb)
 
-        # TODO: implement PID control to set the joint velocities.
-
         prev_timestamp = self.current_timestamp
         self.current_timestamp = rospy.get_time()
         time_interval = self.current_timestamp - prev_timestamp
@@ -319,8 +316,6 @@ class PIDJointVelocityController(Controller):
 
         controller_velocity = target_velocity + p + i + d
         controller_velocity = controller_velocity.astype(float)
-
-        # -------
 
         self._limb.set_joint_velocities(
             joint_array_to_dict(controller_velocity, self._limb)

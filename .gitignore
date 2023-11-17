@@ -3,3 +3,4 @@ devel/
 .vscode
 __pycache__
 wandb/
+.pyc
