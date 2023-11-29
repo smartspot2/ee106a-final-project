@@ -3,8 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
 import skimage as sk
-from mpl_toolkits.mplot3d import Axes3D
-from sklearn.cluster import AgglomerativeClustering, KMeans
+from sklearn.cluster import KMeans
 
 
 def find_contours(image):
@@ -39,31 +38,35 @@ def find_contours(image):
     return final_contours
 
 
-def grayworld_assumption(im):
-    wb_im = cv2.cvtColor(im, cv2.COLOR_BGR2LAB)
-    avg_a = np.median(wb_im[:, :, 1])
-    avg_b = np.median(wb_im[:, :, 2])
-    # print(avg_a)
-    # print(avg_b)
-    # print(wb_im.shape)
-    a_delta = (avg_a - 128) * (wb_im[:, :, 0] / 255) * 1.1
-    b_delta = (avg_b - 128) * (wb_im[:, :, 1] / 255) * 1.1
-    wb_im[:, :, 1] = wb_im[:, :, 1] - a_delta
-    wb_im[:, :, 2] = wb_im[:, :, 2] - b_delta
-    return cv2.cvtColor(wb_im, cv2.COLOR_LAB2BGR)
+def debug_plot_image(image, centers, labels, bins):
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
 
-
-def yen_thresholded_wb(im):
-    wb_im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-    print(wb_im)
-    yen = sk.filters.threshold_yen(wb_im)
-    print(yen)
-    result = sk.exposure.rescale_intensity(im, (0, yen + 50), (0, 255)).astype(np.uint8)
-    result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
-    return result
+    for bin in range(bins):
+        vals = image.reshape(-1, 3)[labels == bin]
+        ax.scatter(
+            vals[:, 0],
+            vals[:, 1],
+            vals[:, 2],
+            marker="+",
+            color=tuple(centers[bin].flatten()),
+            alpha=0.2,
+        )
+    ax.scatter(
+        centers[:, 0],
+        centers[:, 1],
+        centers[:, 2],
+        c="black",
+    )
+    plt.show()
 
 
 def reduce_bitdepth(im, bins):
+    """
+    Reduce the bitdepth of an image using k-means clustering.
+
+    This function is non-deterministic, since the k-means clustering uses a random initialization.
+    """
     image = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
     image = sk.exposure.rescale_intensity(sk.util.img_as_float(image), out_range=(0, 1))
 
@@ -80,37 +83,18 @@ def reduce_bitdepth(im, bins):
     # use the most common as the background
     most_common_idx = scipy.stats.mode(reduced_idx, keepdims=True)[0]
     background_mask = reduced_idx == most_common_idx
-    reduced[background_mask] = 1
-
-    # fig = plt.figure()
-    # ax = fig.add_subplot(1, 1, 1, projection="3d")
-
-    # for bin in range(bins):
-    #     vals = image.reshape(-1, 3)[reduced_idx == bin]
-    #     ax.scatter(
-    #         vals[:, 0],
-    #         vals[:, 1],
-    #         vals[:, 2],
-    #         marker="+",
-    #         c=tuple(centers[bin].flatten()),
-    #         alpha=0.2,
-    #     )
-    # ax.scatter(
-    #     centers[:, 0],
-    #     centers[:, 1],
-    #     centers[:, 2],
-    #     c="black",
-    # )
-    # plt.show()
+    reduced[background_mask] = (1, 1, 1)
 
     reduced = reduced.reshape(image.shape)
 
-    result = sk.util.img_as_ubyte(reduced).astype(np.uint8)
+    # debug_plot_image(image_lab, centers, reduced_idx, bins)
+
+    result = sk.util.img_as_ubyte(np.clip(reduced, 0, 1)).astype(np.uint8)
     result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
     return result
 
 
-def detect_cards(image, contours, card_shape=(180, 280)):
+def detect_cards(image, contours, card_shape=(180, 280), variations=1):
     card_width, card_height = card_shape
     # rectify images
     rectified_cards = []
@@ -152,10 +136,14 @@ def detect_cards(image, contours, card_shape=(180, 280)):
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
         dst = cv2.warpPerspective(image, M, card_shape)
-        # dst = grayworld_assumption(dst)
-        # dst = yen_thresholded_wb(dst)
         dst = cv2.GaussianBlur(dst, (7, 7), 1)
-        dst = reduce_bitdepth(dst, 3)
-        rectified_cards.append(dst)
+        if variations == 1:
+            # if only one variation, then reduce once and append
+            dst = reduce_bitdepth(dst, 3)
+            rectified_cards.append(dst)
+        else:
+            # if multiple variations, reduce bitdepth multiple times to add variations
+            dst_variations = [reduce_bitdepth(dst, 3) for _ in range(variations)]
+            rectified_cards.append(dst_variations)
 
     return rectified_cards

@@ -14,7 +14,7 @@ import rospy
 import time
 from functools import partial
 import torch
-from util.classify import classify
+from util.classify import classify_consensus
 from util.detect import detect_cards, find_contours
 from util.nn import CardClassifier, CardClassifierResnet
 from util.set import find_set
@@ -49,13 +49,13 @@ def main_detect(image, model=None, fig=None, ax=None):
     contours = find_contours(image)
 
     # find cards
-    cards = detect_cards(image, contours)
+    cards = detect_cards(image, contours, variations=5)
 
     if model is not None:
         # classify cards
         labels = []
-        for card in cards:
-            label = classify(model, card)
+        for card_variations in cards:
+            label, _ = classify_consensus(model, card_variations)
             labels.append(label)
 
         # find the set
