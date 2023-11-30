@@ -5,7 +5,7 @@ import enum
 import cv2
 import skimage as sk
 import matplotlib.pyplot as plt
-from util.detect import detect_cards
+from util.detect import detect_cards, find_contours
 
 plt.ion()
 
@@ -61,7 +61,8 @@ def main(args):
         full_file = os.path.join(args.image_dir, file)
         if os.path.isfile(full_file):
             image = cv2.imread(full_file)
-            cards = detect_cards(image)
+            contours = find_contours(image)
+            cards = detect_cards(image, contours)
 
             if len(cards) == 0:
                 continue
