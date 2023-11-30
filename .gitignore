@@ -4,3 +4,4 @@ devel/
 __pycache__
 wandb/
 .pyc
+.DS_Store
