@@ -15,8 +15,10 @@ def main(args):
 
         image = cv2.imread(input_path)
 
+        # blur
+        blurred = cv2.GaussianBlur(image, (7, 7), 1)
         # reduce bitdepth
-        reduced = reduce_bitdepth(image, bins=3)
+        reduced = reduce_bitdepth(blurred, bins=3)
 
         cv2.imwrite(output_path, reduced)
 

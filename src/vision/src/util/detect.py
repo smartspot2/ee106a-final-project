@@ -5,7 +5,41 @@ import scipy.stats
 import skimage as sk
 from sklearn.cluster import KMeans
 
+ARCLENGTH_MAX_EPS = 1
 CLOSE_COLORS_THRESH = 0.1
+SIDE_LENGTH_EPS = -0.05
+
+
+def simplify_contour(contour, n_corners=4):
+    """
+    Binary searches best `epsilon` value to force contour
+        approximation contain exactly `n_corners` points.
+
+    Taken from https://stackoverflow.com/a/55339684
+
+    :param contour: OpenCV2 contour.
+    :param n_corners: Number of corners (points) the contour must contain.
+
+    :returns: Simplified contour in successful case. Otherwise returns None.
+    """
+    n_iter, max_iter = 0, 100
+    lb, ub = 0.0, ARCLENGTH_MAX_EPS
+
+    while True:
+        n_iter += 1
+        if n_iter > max_iter:
+            return None
+
+        k = (lb + ub) / 2.0
+        eps = k * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, eps, True)
+
+        if len(approx) > n_corners:
+            lb = (lb + ub) / 2.0
+        elif len(approx) < n_corners:
+            ub = (lb + ub) / 2.0
+        else:
+            return approx
 
 
 def find_contours(image):
@@ -23,20 +57,28 @@ def find_contours(image):
         edges, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_TC89_L1
     )
 
+    #output = image.copy()
     final_contours = []
-    for contour in contours:
+    for idx, contour in enumerate(contours):
         area = cv2.contourArea(contour)
         if area > 4000:
-            # approximate the contour with a simpler polygon
-            arclength = cv2.arcLength(contour, True)
-            approx_contour = cv2.approxPolyDP(contour, 0.05 * arclength, True)
-            approx_contour_area = cv2.contourArea(approx_contour)
+            #rgb = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+            #output = cv2.drawContours(output, contours, idx, rgb, 2, cv2.LINE_8)
 
-            if approx_contour_area > 2000 and len(approx_contour) == 4:
+            # approximate the contour with a simpler polygon
+            approx_contour = simplify_contour(contour)
+            if approx_contour is None:
+                # unable to simplify to 4 corners
+                continue
+
+            approx_contour_area = cv2.contourArea(approx_contour)
+            if approx_contour_area > 4000 and len(approx_contour) == 4:
                 # approximate contour area must still be large enough,
                 # and it should be a quadrilateral
                 final_contours.append(approx_contour)
 
+    #sk.io.imshow(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+    #sk.io.show()
     return final_contours
 
 
@@ -110,7 +152,26 @@ def reduce_bitdepth(im, bins):
     return result
 
 
-def detect_cards(image, contours, card_shape=(180, 280), variations=1):
+def inflate_y(pos):
+    """
+    Inflate the y-value a little bit if it is smaller, to counteract the perspective distortion slightly.
+    """
+    y = pos[1]
+    new_y = y * (1 + 5 / (0.1 * y + 1))
+    return np.array([pos[0], new_y])
+
+
+def detect_cards(image, contours, card_shape=(180, 280), variations=1, preprocess=True):
+    """
+    Detect all cards in an image, given the card contours.
+
+    `variations` denotes the number of preprocessing variations to perform.
+        The added variations can help with robustness in the classification algorithm.
+
+    `preprocess` is a flag for whether this function should preprocess the image through
+        color bitdepth reduction; if false, the raw rectified cards are returned,
+        and `variations` is ignored.
+    """
     card_width, card_height = card_shape
     # rectify images
     rectified_cards = []
@@ -123,14 +184,20 @@ def detect_cards(image, contours, card_shape=(180, 280), variations=1):
         next_idx = (min_idx + 1) % 4
         prev_idx = (min_idx - 1) % 4
 
-        prev_vec = contour[prev_idx] - contour[min_idx]
-        next_vec = contour[next_idx] - contour[min_idx]
+        prev_vec = inflate_y(contour[prev_idx]) - inflate_y(contour[min_idx])
+        next_vec = inflate_y(contour[next_idx]) - inflate_y(contour[min_idx])
         cross_prod = np.cross(prev_vec, next_vec)
 
         # positive cross product => counter-clockwise
         if cross_prod < 0:
             # flip if negative
             next_idx, prev_idx = prev_idx, next_idx
+
+        # check the lengths of each side; if prev side is longer than next side, then shift by one
+        if np.linalg.norm(prev_vec) > np.linalg.norm(next_vec):
+            min_idx = (min_idx + 1) % 4
+            next_idx = (next_idx + 1) % 4
+            prev_idx = (prev_idx + 1) % 4
 
         oriented_contour = np.array(
             [
@@ -152,14 +219,18 @@ def detect_cards(image, contours, card_shape=(180, 280), variations=1):
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
         dst = cv2.warpPerspective(image, M, card_shape)
-        dst = cv2.GaussianBlur(dst, (7, 7), 1.5)
-        if variations == 1:
-            # if only one variation, then reduce once and append
-            dst = reduce_bitdepth(dst, 3)
-            rectified_cards.append(dst)
+        if preprocess:
+            dst = cv2.GaussianBlur(dst, (7, 7), 1)
+            if variations == 1:
+                # if only one variation, then reduce once and append
+                dst = reduce_bitdepth(dst, 3)
+                rectified_cards.append(dst)
+            else:
+                # if multiple variations, reduce bitdepth multiple times to add variations
+                dst_variations = [reduce_bitdepth(dst, 3) for _ in range(variations)]
+                rectified_cards.append(dst_variations)
         else:
-            # if multiple variations, reduce bitdepth multiple times to add variations
-            dst_variations = [reduce_bitdepth(dst, 3) for _ in range(variations)]
-            rectified_cards.append(dst_variations)
+            # don't preprocess cards; just return the raw warped image
+            rectified_cards.append(dst)
 
     return rectified_cards
