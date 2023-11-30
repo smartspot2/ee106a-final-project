@@ -1,0 +1,9 @@
+<launch>
+    <include file="$(find camera)/launch/run_cam.launch"/>
+    <include file="$(find camera)/launch/ar_track.launch"/>
+
+    <node name="vision" pkg="vision" type="vision.py" respawn="false" output="screen">
+        <param name="vision/model_file" type="string" value="$(find vision)/src/models/classifier-processed-withsmallcroprotateblur-lrexp-resnet.pkl" />
+        <param name="vision/use_resnet" type="bool" value="true"/>
+    </node>
+</launch>

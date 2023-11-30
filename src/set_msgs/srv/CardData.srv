@@ -1,2 +1,3 @@
 ---
 set_msgs/Card[] cards
+uint8[] set # length of 0 (no set found) or 3; indices of set

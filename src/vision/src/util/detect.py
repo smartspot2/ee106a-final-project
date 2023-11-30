@@ -5,6 +5,8 @@ import scipy.stats
 import skimage as sk
 from sklearn.cluster import KMeans
 
+CLOSE_COLORS_THRESH = 0.1
+
 
 def find_contours(image):
     # grayscale image
@@ -81,15 +83,29 @@ def reduce_bitdepth(im, bins):
     reduced = centers[reduced_idx]
 
     # use the most common as the background
-    most_common_idx = scipy.stats.mode(reduced_idx, keepdims=True)[0]
+    values, counts = np.unique(reduced_idx, return_counts=True)
+    counts_argsorted = np.argsort(counts)
+    most_common_idx = values[counts_argsorted[-1]]
+    second_common_idx = values[counts_argsorted[-2]]
+
     background_mask = reduced_idx == most_common_idx
     reduced[background_mask] = (1, 1, 1)
+
+    # if the second most common is very close to the most common, also make it white
+    if (
+        np.linalg.norm(centers[most_common_idx] - centers[second_common_idx])
+        < CLOSE_COLORS_THRESH
+    ):
+        background_mask = reduced_idx == second_common_idx
+        reduced[background_mask] = (1, 1, 1)
 
     reduced = reduced.reshape(image.shape)
 
     # debug_plot_image(image_lab, centers, reduced_idx, bins)
 
-    result = sk.util.img_as_ubyte(np.clip(reduced, 0, 1)).astype(np.uint8)
+    result = sk.util.img_as_ubyte(
+        sk.exposure.rescale_intensity(np.clip(reduced, 0, 1), out_range=(0, 1))
+    ).astype(np.uint8)
     result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
     return result
 
@@ -136,7 +152,7 @@ def detect_cards(image, contours, card_shape=(180, 280), variations=1):
 
         M = cv2.getPerspectiveTransform(oriented_contour, rectified_target)
         dst = cv2.warpPerspective(image, M, card_shape)
-        dst = cv2.GaussianBlur(dst, (7, 7), 1)
+        dst = cv2.GaussianBlur(dst, (7, 7), 1.5)
         if variations == 1:
             # if only one variation, then reduce once and append
             dst = reduce_bitdepth(dst, 3)
