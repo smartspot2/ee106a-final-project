@@ -18,11 +18,11 @@ def find_set(card_labels):
     """
 
     label_set = set(card_labels)
+    unique_labels = list(label_set)
 
-    for i in range(len(card_labels)):
-        card_i = card_labels[i]
-        for j in range(i + 1, len(card_labels)):
-            card_j = card_labels[j]
+    for i, card_i in enumerate(unique_labels):
+        for j in range(i + 1, len(unique_labels)):
+            card_j = unique_labels[j]
 
             card_i_values = np.array(deserialize_label(label_from_string(card_i)))
             card_j_values = np.array(deserialize_label(label_from_string(card_j)))
@@ -32,6 +32,8 @@ def find_set(card_labels):
 
             if third_card in label_set:
                 # found set, return sorted list of indices
+                i = card_labels.index(card_i)
+                j = card_labels.index(card_j)
                 k = card_labels.index(third_card)
                 return sorted([i, j, k])
 

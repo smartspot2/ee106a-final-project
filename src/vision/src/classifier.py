@@ -12,6 +12,7 @@ import util
 from torch import nn
 from torch.utils.data import DataLoader, SequentialSampler
 from torchinfo import summary
+from torchvision.transforms.functional import rotate
 from torchvision.transforms.v2 import (
     ColorJitter,
     Compose,
@@ -21,6 +22,7 @@ from torchvision.transforms.v2 import (
     RandomOrder,
     RandomResizedCrop,
     RandomRotation,
+    Resize,
     ToDtype,
     ToImage,
 )
@@ -40,6 +42,23 @@ def train(args):
         [
             ToImage(),
             ToDtype(torch.float, scale=True),
+            # randomly rotate the image by 90 degrees;
+            # ensures robustness against incorrectly orienting the card in rectification
+            RandomApply(
+                [
+                    Resize(size=(180, 280), antialias=True),
+                    lambda inp: rotate(
+                        inp,
+                        90,
+                        interpolation=InterpolationMode.BILINEAR,
+                        fill=[1, 1, 1],
+                    ),
+                    # after rotation, size should be (280, 180) as normal;
+                    # but still resize to make sure
+                    Resize(size=(280, 180), antialias=True),
+                ],
+                p=0.4,
+            ),
             RandomOrder(
                 [
                     # randomly resize and crop the image;
@@ -50,7 +69,7 @@ def train(args):
                     RandomRotation(
                         degrees=(-10, 10),
                         interpolation=InterpolationMode.BILINEAR,
-                        fill=1,
+                        fill=[1, 1, 1],
                     ),
                     # randomly blur the image (and occasionally don't blur)
                     # ensures robustness against image quality
@@ -233,7 +252,7 @@ if __name__ == "__main__":
     train_hyperparams = train_parser.add_argument_group("Hyperparameters")
 
     train_hyperparams.add_argument(
-        "--num-epochs", default=100, type=int, help="Number of epochs to train for"
+        "--num-epochs", default=200, type=int, help="Number of epochs to train for"
     )
     train_hyperparams.add_argument(
         "--batch-size", default=64, type=int, help="Training batch size"
@@ -243,7 +262,7 @@ if __name__ == "__main__":
     )
     train_hyperparams.add_argument(
         "--learning-rate-gamma",
-        default=0.99,
+        default=0.98,
         type=float,
         help="Exponential learning rate schedule gamma",
     )
