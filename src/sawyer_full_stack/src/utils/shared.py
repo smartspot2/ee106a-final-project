@@ -3,7 +3,11 @@ import roslaunch
 import rospkg
 import rospy
 import tf2_ros
-from controllers.controllers import FeedforwardJointVelocityController, PIDJointVelocityController
+import tf
+from controllers.controllers import (
+    FeedforwardJointVelocityController,
+    PIDJointVelocityController,
+)
 from paths.paths import MotionPath
 from paths.trajectories import LinearTrajectory
 from utils.utils import *
@@ -25,7 +29,6 @@ def tuck():
         print("Canceled. Not tucking the arm.")
 
 
-
 def lookup_transform(a, b):
     tfBuffer = tf2_ros.Buffer()
     tfListener = tf2_ros.TransformListener(tfBuffer)
@@ -40,12 +43,15 @@ def lookup_transform(a, b):
 
 
 def lookup_tag(tag_name):
-    trans = lookup_transform("base", tag_name)
-    tag_pos = [getattr(trans.transform.translation, dim) for dim in ("x", "y", "z")]
-    return np.array(tag_pos)
+    return lookup_transform("base", tag_name).transform
 
 
-def get_trajectory(limb, kin, ik_solver, tag_pos, num_waypoints, goal_offset):
+def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_goal):
+    """
+    Paramters:
+        tag_transform - transformation between base and AR tag (rotation + position)
+        ar_tag_goal - goal position in AR tag frame (non-homogeneous coordinate)
+    """
 
     trans = lookup_transform("base", "right_hand")
 
@@ -54,8 +60,28 @@ def get_trajectory(limb, kin, ik_solver, tag_pos, num_waypoints, goal_offset):
     )
     print("Current Position:", current_position)
 
-    target_pos = tag_pos[0]
-    target_pos += goal_offset
+    tag_to_base_rot = tf.transformations.quaternion_matrix(
+        [
+            tag_transform.rotation.x,
+            tag_transform.rotation.y,
+            tag_transform.rotation.z,
+            tag_transform.rotation.w,
+        ]
+    )
+    tag_to_base_trans = np.array(
+        [
+            [
+                tag_transform.translation.x,
+                tag_transform.translation.y,
+                tag_transform.translation.z,
+                1,
+            ]
+        ]
+    ).T
+    
+    ar_tag_goal_hom = np.array([*ar_tag_goal, 1])
+
+    target_pos = (tag_to_base_rot @ ar_tag_goal_hom + tag_to_base_trans).flatten()[:3]
 
     print("Target Position:", target_pos)
     trajectory = LinearTrajectory(
@@ -81,4 +107,3 @@ def get_controller(controller_name, limb, kin):
     else:
         raise ValueError("Controller {} not recognized".format(controller_name))
     return controller
-

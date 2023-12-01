@@ -20,7 +20,8 @@ from util.nn import CardClassifier, CardClassifierResnet
 from util.set import find_set
 from util.labels import label_from_string, deserialize_label
 
-from sensor_msgs.msg import Image
+import image_geometry
+from sensor_msgs.msg import Image, CameraInfo
 from set_msgs.msg import Card
 from set_msgs.srv import CardData
 import cv_bridge
@@ -124,7 +125,13 @@ def main_manual(model_file, use_resnet=False):
             break
 
         image_data = rospy.wait_for_message("/usb_cam/image_raw", Image)
-        image = bridge.imgmsg_to_cv2(image_data, "bgr8")
+        camera_info = rospy.wait_for_message("/usb_cam/camera_info", CameraInfo)
+        camera_model = image_geometry.PinholeCameraModel()
+        camera_model.fromCameraInfo(camera_info)
+
+        raw_image = bridge.imgmsg_to_cv2(image_data, "bgr8")
+        image = raw_image.copy()
+        camera_model.rectifyImage(raw_image, image)
 
         plt.clf()
         main_detect(image, model=model)
@@ -134,8 +141,14 @@ def main_manual(model_file, use_resnet=False):
 def vision_callback(_request, model, tag_number):
     # get image from camera
     image_data = rospy.wait_for_message("/usb_cam/image_raw", Image)
+    camera_info = rospy.wait_for_message("/usb_cam/camera_info", CameraInfo)
+    camera_model = image_geometry.PinholeCameraModel()
+    camera_model.fromCameraInfo(camera_info)
+
     bridge = cv_bridge.CvBridge()
-    image = bridge.imgmsg_to_cv2(image_data, "bgr8")
+    raw_image = bridge.imgmsg_to_cv2(image_data, "bgr8")
+    image = raw_image.copy()
+    camera_model.rectifyImage(raw_image, image)
 
     # find contours
     contours = find_contours(image)
@@ -183,7 +196,7 @@ def vision_callback(_request, model, tag_number):
         )
         cur_card.position.x = card_center[0]
         cur_card.position.y = card_center[1]
-        cur_card.position.z = 0
+        cur_card.position.z = card_center[2]
         return_cards.append(cur_card)
 
     return {"cards": return_cards, "set": found_set}
@@ -206,7 +219,7 @@ def main(tag_number, model_file, use_resnet=False):
     rospy.spin()
 
 
-MAIN_MANUAL = True
+MAIN_MANUAL = False
 
 if __name__ == "__main__":
     rospy.init_node("vision", anonymous=True)

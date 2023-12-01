@@ -7,6 +7,7 @@ from sklearn.cluster import MiniBatchKMeans
 import tf2_ros
 import rospy
 import tf
+import image_geometry
 
 from sensor_msgs.msg import CameraInfo
 
@@ -177,8 +178,11 @@ def find_card_center(contour, tag_number):
     v = int(M["m01"] / M["m00"])
 
     camera_info = rospy.wait_for_message("/usb_cam/camera_info", CameraInfo)
-    K = camera_info.K
-    f = K[0]
+    camera_model = image_geometry.PinholeCameraModel()
+    camera_model.fromCameraInfo(camera_info)
+
+    unit_ray = camera_model.projectPixelTo3dRay((u, v))
+    print(unit_ray)
 
     tfBuffer = tf2_ros.Buffer()
     tfListener = tf2_ros.TransformListener(tfBuffer)
@@ -195,14 +199,6 @@ def find_card_center(contour, tag_number):
         raise e
 
     # transformation matrix from AR marker, as well as its inverse
-    (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(
-        [
-            trans.transform.rotation.x,
-            trans.transform.rotation.y,
-            trans.transform.rotation.z,
-            trans.transform.rotation.w,
-        ]
-    )
 
     x, y, z = (
         trans.transform.translation.x,
@@ -210,30 +206,12 @@ def find_card_center(contour, tag_number):
         trans.transform.translation.z,
     )
 
-    cam2ar = np.array(
-        [
-            [
-                np.cos(roll) * np.cos(pitch),
-                np.sin(roll) * -1 * np.cos(pitch),
-                np.sin(pitch),
-                x,
-            ],
-            [
-                np.cos(yaw) * np.sin(roll) + np.cos(roll) * np.sin(pitch) * np.sin(yaw),
-                np.cos(roll) * np.cos(yaw) - np.sin(roll) * np.sin(pitch) * np.sin(yaw),
-                -1 * np.cos(pitch) * np.sin(yaw),
-                y,
-            ],
-            [
-                -1 * np.cos(roll) * np.cos(yaw) * np.sin(pitch)
-                + np.sin(roll) * np.sin(yaw),
-                np.cos(yaw) * np.sin(roll) * np.sin(pitch) + np.cos(roll) * np.sin(yaw),
-                np.cos(roll) * np.cos(yaw),
-                z,
-            ],
-            [0, 0, 0, 1],
-        ]
-    )
+    cam2ar = tf.transformations.quaternion_matrix([
+        trans.transform.rotation.x,
+        trans.transform.rotation.y,
+        trans.transform.rotation.z,
+        trans.transform.rotation.w,
+    ])
 
     ar2cam = np.linalg.inv(cam2ar)
 
@@ -243,7 +221,7 @@ def find_card_center(contour, tag_number):
 
     # origin and direction of ray
     o = np.array([[0, 0, 0, 1]]).T
-    d = np.array([u, v, f, 0]).T
+    d = np.array([*unit_ray, 0]).T
 
     # point of intersection in camera space
     p = o + d * (((p0 - o) @ normal) / (d @ normal))

@@ -117,8 +117,8 @@ class MotionPath:
             # rospy.loginfo("SUCCESS!")
             # Format solution into Limb API-compatible dictionary
             return np.array(response.joints[0].position)
-            
-        raise RuntimeError("IK solver unable to solve")
+        
+        raise RuntimeError(f"IK solver unable to solve: target {pose_stamped}")
 
     def trajectory_point(self, t, jointspace):
         """

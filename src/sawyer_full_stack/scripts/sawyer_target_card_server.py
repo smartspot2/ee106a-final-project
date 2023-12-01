@@ -7,12 +7,13 @@ import rospy
 from paths.path_planner import PathPlanner
 from sawyer_pykdl import sawyer_kinematics
 from trac_ik_python.trac_ik import IK
+import numpy as np
 from utils.utils import *
 from utils.shared import *
 
 from set_msgs.srv import TargetPosition
 
-AR_MARKER = "ar_marker_16"
+AR_MARKER = "ar_marker_6"
 CONTROLLER = "pid"
 LOOP_RATE = 200 # ms
 TIMEOUT = 60 # seconds
@@ -27,7 +28,7 @@ kin = sawyer_kinematics("right")
 planner = PathPlanner("right_arm") # moveit! wrapper (used to go to start position)
 controller = get_controller(CONTROLLER, limb, kin)
 # tuck()
-tag_pos = [lookup_tag(AR_MARKER)]
+tag_pos = lookup_tag(AR_MARKER)
 
 
 def sawyer_target_card_callback(request):
@@ -35,7 +36,7 @@ def sawyer_target_card_callback(request):
     rospy.loginfo('in callback')
 
     try:
-        goal_offset = [request.position.x, request.position.y, request.position.z]
+        goal_offset = np.array([request.position.x, request.position.y, request.position.z])
         robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, NUM_WAYPOINTS, goal_offset)
 
         # Move to the trajectory start position
