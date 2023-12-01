@@ -55,7 +55,7 @@ def main_detect(image, model=None):
             labels.append(label)
         card_shape = cards[0][0].shape
         cards = np.array(cards).reshape(-1, *card_shape)
-        
+
         # find the set
         found_set = find_set(labels)
     else:
@@ -84,6 +84,10 @@ def main_detect(image, model=None):
 
     ax1.imshow(output)
     for contour, label in zip(contours, labels):
+        if label is None:
+            # unable to classify, skip
+            continue
+
         moments = cv2.moments(contour)
         cx = moments["m10"] / moments["m00"]
         cy = moments["m01"] / moments["m00"]
@@ -151,6 +155,10 @@ def vision_callback(_request, model):
     # prepare return message
     return_cards = []
     for idx, (card, contour, label) in enumerate(zip(cards, contours, labels)):
+        if label is None:
+            # unable to classify, skip
+            continue
+
         # find center of contour
         moments = cv2.moments(contour)
         cx = moments["m10"] / moments["m00"]
@@ -179,8 +187,6 @@ def main(model_file, use_resnet=False):
     """
     Main function to start a service listening to service calls.
     """
-
-    rospy.init_node("vision", anonymous=True)
     model = load_model(model_file, use_resnet=use_resnet)
     rospy.loginfo(f"Model file: {model_file}")
     assert model is not None
@@ -190,19 +196,22 @@ def main(model_file, use_resnet=False):
     rospy.spin()
 
 
+MAIN_MANUAL = False
+
 if __name__ == "__main__":
-    import argparse
+    rospy.init_node("vision", anonymous=True)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--manual", action="store_true")
-    parser.add_argument("--model-file", type=str, help="Model file")
-    parser.add_argument("--use-resnet", action="store_true")
-    args = parser.parse_args()
+    if MAIN_MANUAL:
+        import argparse
 
-    if args.manual:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--model-file")
+        parser.add_argument("--use-resnet", action="store_true")
+        args = parser.parse_args()
+
         main_manual(args.model_file, args.use_resnet)
     else:
-        model_file = rospy.get_param("vision/model_file", None)
-        use_resnet = rospy.get_param("vision/use_resnet", False)
+        model_file = rospy.get_param("/vision/model_file")
+        use_resnet = rospy.get_param("/vision/use_resnet", False)
 
         main(model_file, use_resnet)

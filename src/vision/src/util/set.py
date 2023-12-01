@@ -11,13 +11,15 @@ def find_set(card_labels):
     """
     Given a list of string labels (in the form "{shape}-{color}-{count}-{shade}"),
     return the indices of a set.
+    None values in `card_labels` are ignored.
+
     Returns None if no set can be found.
 
     Uses a brute force search over all possible pairs, and checks if the (forced)
     third card is present.
     """
 
-    label_set = set(card_labels)
+    label_set = set([label for label in card_labels if label is not None])
     unique_labels = list(label_set)
 
     for i, card_i in enumerate(unique_labels):
