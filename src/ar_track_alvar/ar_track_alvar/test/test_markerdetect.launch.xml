@@ -4,7 +4,7 @@
   <arg name="cam_info_topic" default="/camera/camera_info" />	
   <arg name="marker_margin" default="2" />
   <arg name="marker_resolution" default="5" />
-  <arg name="marker_size" default="2.3" />
+  <arg name="marker_size" default="15.0000" />
   <arg name="max_new_marker_error" default="0.08" />
   <arg name="max_frequency" default="100" />
   <arg name="max_track_error" default="0.2" />

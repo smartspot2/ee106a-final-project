@@ -27,6 +27,7 @@ kin = sawyer_kinematics("right")
 planner = PathPlanner("right_arm") # moveit! wrapper (used to go to start position)
 controller = get_controller(CONTROLLER, limb, kin)
 # tuck()
+tag_pos = [lookup_tag(AR_MARKER)]
 
 
 def sawyer_target_card_callback(request):
@@ -34,8 +35,6 @@ def sawyer_target_card_callback(request):
     rospy.loginfo('in callback')
 
     try:
-        tag_pos = [lookup_tag(AR_MARKER)]
-
         goal_offset = [request.position.x, request.position.y, request.position.z]
         robot_trajectory = get_trajectory(limb, kin, ik_solver, tag_pos, NUM_WAYPOINTS, goal_offset)
 

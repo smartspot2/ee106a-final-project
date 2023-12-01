@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
 import skimage as sk
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 import tf2_ros
 import rospy
 import tf
+
+from sensor_msgs.msg import CameraInfo
 
 ARCLENGTH_MAX_EPS = 1
 CLOSE_COLORS_THRESH = 0.1
@@ -45,7 +47,6 @@ def simplify_contour(contour, n_corners=4):
             return approx
 
 
-
 def find_contours(image):
     # grayscale image
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -61,13 +62,13 @@ def find_contours(image):
         edges, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_TC89_L1
     )
 
-    #output = image.copy()
+    # output = image.copy()
     final_contours = []
     for idx, contour in enumerate(contours):
         area = cv2.contourArea(contour)
         if area > 4000:
-            #rgb = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
-            #output = cv2.drawContours(output, contours, idx, rgb, 2, cv2.LINE_8)
+            # rgb = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+            # output = cv2.drawContours(output, contours, idx, rgb, 2, cv2.LINE_8)
 
             # approximate the contour with a simpler polygon
             approx_contour = simplify_contour(contour)
@@ -81,8 +82,8 @@ def find_contours(image):
                 # and it should be a quadrilateral
                 final_contours.append(approx_contour)
 
-    #sk.io.imshow(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
-    #sk.io.show()
+    # sk.io.imshow(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+    # sk.io.show()
     return final_contours
 
 
@@ -119,7 +120,7 @@ def reduce_bitdepth(im, bins):
     image = sk.exposure.rescale_intensity(sk.util.img_as_float(image), out_range=(0, 1))
 
     # run k-means clustering to reduce bit-depth
-    kmeans = KMeans(bins, n_init="auto")
+    kmeans = MiniBatchKMeans(bins, n_init="auto")
     # flatten image and fit kmeans
     flat_image = image.reshape(-1, 3)
     reduced_idx = kmeans.fit_predict(flat_image)
@@ -165,9 +166,7 @@ def inflate_y(pos):
     return np.array([pos[0], new_y])
 
 
-
-
-def find_card_center(contour, K, tag_number):
+def find_card_center(contour, tag_number):
     """
     Returns the center of a given contour in AR tag coordinates, as well as the u and v position in the image.
     """
@@ -176,35 +175,65 @@ def find_card_center(contour, K, tag_number):
     # the point in the image coordinates
     u = int(M["m10"] / M["m00"])
     v = int(M["m01"] / M["m00"])
-    f = K[0][0]
+
+    camera_info = rospy.wait_for_message("/usb_cam/camera_info", CameraInfo)
+    K = camera_info.K
+    f = K[0]
 
     tfBuffer = tf2_ros.Buffer()
     tfListener = tf2_ros.TransformListener(tfBuffer)
 
     try:
         # TODO: lookup the transform and save it in trans
-        trans = tfBuffer.lookup_transform('usb_cam', 'ar_marker_{}'.format(tag_number), rospy.Time(), rospy.Duration(10.0))
-        tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
-        return np.array(tag_pos)
+        trans = tfBuffer.lookup_transform(
+            "usb_cam",
+            "ar_marker_{}".format(tag_number),
+            rospy.Time(),
+            rospy.Duration(10),
+        )
     except Exception as e:
-        print(e)
-        print("Failed to find transform")
-    
+        raise e
+
     # transformation matrix from AR marker, as well as its inverse
     (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(
-    [trans.transform.rotation.x, trans.transform.rotation.y,
-    trans.transform.rotation.z, trans.transform.rotation.w])
+        [
+            trans.transform.rotation.x,
+            trans.transform.rotation.y,
+            trans.transform.rotation.z,
+            trans.transform.rotation.w,
+        ]
+    )
 
-    x, y, z = trans.transform.translation.x, trans.transform.translation.y, trans.tranform.translation.z
+    x, y, z = (
+        trans.transform.translation.x,
+        trans.transform.translation.y,
+        trans.transform.translation.z,
+    )
 
-    sin, cos, = np.sin, np.cos
-
-    cam2ar = np.array([
-        [cos(roll) * cos(pitch), sin(roll) * -1 * cos(pitch), sin(pitch), x],
-        [cos(yaw) * sin(roll) + cos(roll) * sin(pitch) * sin(yaw), cos(roll) * cos(yaw) - sin(roll) * sin(pitch) * sin(yaw), -1 * cos(pitch) * sin(yaw), y],
-        [-1 * cos(roll) * cos(yaw) * sin(pitch) + sin(roll) * sin(yaw), cos(yaw) * sin(roll) * sin(pitch) + cos(roll) * sin(yaw), cos(roll) * cos(yaw), z],
-        [0, 0, 0, 1]
-    ])
+    cam2ar = np.array(
+        [
+            [
+                np.cos(roll) * np.cos(pitch),
+                np.sin(roll) * -1 * np.cos(pitch),
+                np.sin(pitch),
+                x,
+            ],
+            [
+                np.cos(yaw) * np.sin(roll) + np.cos(roll) * np.sin(pitch) * np.sin(yaw),
+                np.cos(roll) * np.cos(yaw) - np.sin(roll) * np.sin(pitch) * np.sin(yaw),
+                -1 * np.cos(pitch) * np.sin(yaw),
+                y,
+            ],
+            [
+                -1 * np.cos(roll) * np.cos(yaw) * np.sin(pitch)
+                + np.sin(roll) * np.sin(yaw),
+                np.cos(yaw) * np.sin(roll) * np.sin(pitch) + np.cos(roll) * np.sin(yaw),
+                np.cos(roll) * np.cos(yaw),
+                z,
+            ],
+            [0, 0, 0, 1],
+        ]
+    )
 
     ar2cam = np.linalg.inv(cam2ar)
 
@@ -214,14 +243,15 @@ def find_card_center(contour, K, tag_number):
 
     # origin and direction of ray
     o = np.array([[0, 0, 0, 1]]).T
-    d = np.array([u, v, z, 0]).T
-    
+    d = np.array([u, v, f, 0]).T
+
     # point of intersection in camera space
     p = o + d * (((p0 - o) @ normal) / (d @ normal))
 
-    return cam2ar @ p, u, v
+    return cam2ar @ p
 
-def detect_cards(image, contours, card_shape=(180, 280), variations=1, preprocess = True):
+
+def detect_cards(image, contours, card_shape=(180, 280), variations=1, preprocess=True):
     """
     Detect all cards in an image, given the card contours.
 

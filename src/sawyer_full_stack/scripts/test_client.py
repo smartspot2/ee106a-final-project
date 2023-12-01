@@ -10,7 +10,7 @@ def patrol_client():
     try:
         patrol_proxy = rospy.ServiceProxy('/sawyer_target_card', TargetPosition)
         rospy.loginfo('test_target_position_client ready')
-        pos = Point(0.0, 0.0, 0.5)
+        pos = Point(0.0, 0.0, -0.2)
         patrol_proxy(pos)
     except rospy.ServiceException as e:
         rospy.loginfo(e)

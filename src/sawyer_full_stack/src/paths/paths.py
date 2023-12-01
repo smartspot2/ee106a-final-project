@@ -118,7 +118,7 @@ class MotionPath:
             # Format solution into Limb API-compatible dictionary
             return np.array(response.joints[0].position)
             
-        return None
+        raise RuntimeError("IK solver unable to solve")
 
     def trajectory_point(self, t, jointspace):
         """

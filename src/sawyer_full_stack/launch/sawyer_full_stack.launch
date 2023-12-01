@@ -1,0 +1,16 @@
+<launch>
+    <node name="intera_interface" pkg="intera_interface" type="joint_trajectory_action_server.py" output="screen">
+    </node>
+
+    <include file="$(find sawyer_moveit_config)/launch/sawyer_moveit.launch">
+        <arg name="electric_gripper" value="true" />
+    </include>
+
+    <include file="$(find sawyer_full_stack)/launch/sawyer_camera_track.launch" />
+
+    <include file="$(find sawyer_full_stack)/launch/custom_sawyer_tuck.launch" />
+
+    <node name="sawyer_full_stack" pkg="sawyer_full_stack" type="sawyer_target_card_server.py">
+    </node>
+
+</launch>

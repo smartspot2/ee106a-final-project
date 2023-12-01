@@ -4,6 +4,7 @@
 
     <node name="vision" pkg="vision" type="vision.py" respawn="false" output="screen">
         <param name="/model_file" type="string" value="$(find vision)/src/models/classifier-processed2-randorient-resnet-400.pkl" />
-        <param name="/use_resnet" type="bool" value="true"/>
+        <param name="/use_resnet" type="bool" value="true" />
+        <param name="/tag_number" type="int" value="16" />
     </node>
 </launch>

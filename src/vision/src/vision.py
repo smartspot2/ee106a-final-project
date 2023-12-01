@@ -15,7 +15,7 @@ import time
 from functools import partial
 import torch
 from util.classify import classify_consensus
-from util.detect import detect_cards, find_contours
+from util.detect import detect_cards, find_contours, find_card_center
 from util.nn import CardClassifier, CardClassifierResnet
 from util.set import find_set
 from util.labels import label_from_string, deserialize_label
@@ -131,7 +131,7 @@ def main_manual(model_file, use_resnet=False):
         plt.show()
 
 
-def vision_callback(_request, model):
+def vision_callback(_request, model, tag_number):
     # get image from camera
     image_data = rospy.wait_for_message("/usb_cam/image_raw", Image)
     bridge = cv_bridge.CvBridge()
@@ -149,22 +149,28 @@ def vision_callback(_request, model):
         label, _ = classify_consensus(model, card_variations)
         labels.append(label)
 
+    filtered_cards = []
+    filtered_contours = []
+    filtered_labels = []
+    for card, contour, label in zip(cards, contours, labels):
+        if label is None:
+            continue
+
+        filtered_cards.append(card)
+        filtered_contours.append(contour)
+        filtered_labels.append(label)
+
     # find the set
-    found_set = find_set(labels)
+    found_set = find_set(filtered_labels)
 
     # prepare return message
     return_cards = []
-    for idx, (card, contour, label) in enumerate(zip(cards, contours, labels)):
-        if label is None:
-            # unable to classify, skip
-            continue
-
-        # find center of contour
-        moments = cv2.moments(contour)
-        cx = moments["m10"] / moments["m00"]
-        cy = moments["m01"] / moments["m00"]
-
-        # TODO: change coordinates to AR tag coordinates
+    for idx, (card, contour, label) in enumerate(
+        zip(filtered_cards, filtered_contours, filtered_labels)
+    ):
+        # find center of contour in AR tag coordinates
+        card_center = find_card_center(contour, tag_number)
+        card_center = card_center.flatten()
 
         # convert label to ints
         shape, color, count, shade = deserialize_label(label_from_string(label))
@@ -175,15 +181,15 @@ def vision_callback(_request, model):
             number=count,
             shading=shade,
         )
-        cur_card.position.x = cx
-        cur_card.position.y = cy
+        cur_card.position.x = card_center[0]
+        cur_card.position.y = card_center[1]
         cur_card.position.z = 0
         return_cards.append(cur_card)
 
     return {"cards": return_cards, "set": found_set}
 
 
-def main(model_file, use_resnet=False):
+def main(tag_number, model_file, use_resnet=False):
     """
     Main function to start a service listening to service calls.
     """
@@ -191,12 +197,16 @@ def main(model_file, use_resnet=False):
     rospy.loginfo(f"Model file: {model_file}")
     assert model is not None
 
-    rospy.Service("/vision", CardData, partial(vision_callback, model=model))
+    rospy.Service(
+        "/vision",
+        CardData,
+        partial(vision_callback, model=model, tag_number=tag_number),
+    )
     rospy.loginfo("Running vision server...")
     rospy.spin()
 
 
-MAIN_MANUAL = False
+MAIN_MANUAL = True
 
 if __name__ == "__main__":
     rospy.init_node("vision", anonymous=True)
@@ -213,5 +223,6 @@ if __name__ == "__main__":
     else:
         model_file = rospy.get_param("/vision/model_file")
         use_resnet = rospy.get_param("/vision/use_resnet", False)
+        tag_number = rospy.get_param("/vision/tag_number")
 
-        main(model_file, use_resnet)
+        main(tag_number, model_file, use_resnet)
