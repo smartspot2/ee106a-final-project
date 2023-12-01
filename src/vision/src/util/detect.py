@@ -4,6 +4,9 @@ import numpy as np
 import scipy.stats
 import skimage as sk
 from sklearn.cluster import KMeans
+import tf2_ros
+import rospy
+import tf
 
 ARCLENGTH_MAX_EPS = 1
 CLOSE_COLORS_THRESH = 0.1
@@ -40,6 +43,7 @@ def simplify_contour(contour, n_corners=4):
             ub = (lb + ub) / 2.0
         else:
             return approx
+
 
 
 def find_contours(image):
@@ -161,7 +165,63 @@ def inflate_y(pos):
     return np.array([pos[0], new_y])
 
 
-def detect_cards(image, contours, card_shape=(180, 280), variations=1, preprocess=True):
+
+
+def find_card_center(contour, K, tag_number):
+    """
+    Returns the center of a given contour in AR tag coordinates, as well as the u and v position in the image.
+    """
+    M = cv2.moments(contour)
+
+    # the point in the image coordinates
+    u = int(M["m10"] / M["m00"])
+    v = int(M["m01"] / M["m00"])
+    f = K[0][0]
+
+    tfBuffer = tf2_ros.Buffer()
+    tfListener = tf2_ros.TransformListener(tfBuffer)
+
+    try:
+        # TODO: lookup the transform and save it in trans
+        trans = tfBuffer.lookup_transform('usb_cam', 'ar_marker_{}'.format(tag_number), rospy.Time(), rospy.Duration(10.0))
+        tag_pos = [getattr(trans.transform.translation, dim) for dim in ('x', 'y', 'z')]
+        return np.array(tag_pos)
+    except Exception as e:
+        print(e)
+        print("Failed to find transform")
+    
+    # transformation matrix from AR marker, as well as its inverse
+    (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(
+    [trans.transform.rotation.x, trans.transform.rotation.y,
+    trans.transform.rotation.z, trans.transform.rotation.w])
+
+    x, y, z = trans.transform.translation.x, trans.transform.translation.y, trans.tranform.translation.z
+
+    sin, cos, = np.sin, np.cos
+
+    cam2ar = np.array([
+        [cos(roll) * cos(pitch), sin(roll) * -1 * cos(pitch), sin(pitch), x],
+        [cos(yaw) * sin(roll) + cos(roll) * sin(pitch) * sin(yaw), cos(roll) * cos(yaw) - sin(roll) * sin(pitch) * sin(yaw), -1 * cos(pitch) * sin(yaw), y],
+        [-1 * cos(roll) * cos(yaw) * sin(pitch) + sin(roll) * sin(yaw), cos(yaw) * sin(roll) * sin(pitch) + cos(roll) * sin(yaw), cos(roll) * cos(yaw), z],
+        [0, 0, 0, 1]
+    ])
+
+    ar2cam = np.linalg.inv(cam2ar)
+
+    # normal to plane, point on the plane
+    normal = ar2cam @ np.array([[0, 0, 1, 0]]).T
+    p0 = ar2cam @ np.array([0, 0, 0, 1]).T
+
+    # origin and direction of ray
+    o = np.array([[0, 0, 0, 1]]).T
+    d = np.array([u, v, z, 0]).T
+    
+    # point of intersection in camera space
+    p = o + d * (((p0 - o) @ normal) / (d @ normal))
+
+    return cam2ar @ p, u, v
+
+def detect_cards(image, contours, card_shape=(180, 280), variations=1, preprocess = True):
     """
     Detect all cards in an image, given the card contours.
 
