@@ -53,14 +53,16 @@ def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_go
         ar_tag_goal - goal position in AR tag frame (non-homogeneous coordinate)
     """
 
-    trans = lookup_transform("base", "right_hand")
+    trans = lookup_transform("base", "right_gripper_tip")
+    rospy.loginfo(f"transformation {trans}")
 
     current_position = np.array(
         [getattr(trans.transform.translation, dim) for dim in ("x", "y", "z")]
     )
-    print("Current Position:", current_position)
+    rospy.loginfo(f"Current Position: {current_position}")
+    rospy.loginfo(f"tag_transform {tag_transform}")
 
-    tag_to_base_rot = tf.transformations.quaternion_matrix(
+    tag_to_base = tf.transformations.quaternion_matrix(
         [
             tag_transform.rotation.x,
             tag_transform.rotation.y,
@@ -68,38 +70,60 @@ def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_go
             tag_transform.rotation.w,
         ]
     )
-    tag_to_base_trans = np.array(
-        [
-            [
-                tag_transform.translation.x,
-                tag_transform.translation.y,
-                tag_transform.translation.z,
-                1,
-            ]
-        ]
-    ).T
-    
+
+    tag_to_base[:3, 3] = [
+        tag_transform.translation.x,
+        tag_transform.translation.y,
+        tag_transform.translation.z,
+    ]
+
+    # tag_to_base_trans = np.array(
+    #     [
+    #         [
+    #             tag_transform.translation.x,
+    #             tag_transform.translation.y,
+    #             tag_transform.translation.z,
+    #             1,
+    #         ]
+    #     ]
+    # ).T
+
+    rospy.loginfo(f"tag_to_base {tag_to_base}")
+
     ar_tag_goal_hom = np.array([*ar_tag_goal, 1])
 
-    target_pos = (tag_to_base_rot @ ar_tag_goal_hom + tag_to_base_trans).flatten()[:3]
+    rospy.loginfo(f"ar_tag_goal_hom {ar_tag_goal_hom}")
+
+    target_pos = tag_to_base @ ar_tag_goal_hom
 
     print("Target Position:", target_pos)
     trajectory = LinearTrajectory(
         start_position=current_position,
-        goal_position=target_pos,
-        goal_orientation=np.array([0.5, -0.5, 0.5, -0.5]),
+        goal_position=target_pos[:3],
+        # goal_position=np.array([0.576, -0.047, 0.0]),
+        # goal_position=current_position,
+        # goal_orientation=np.array([0.5, -0.5, 0.5, -0.5]),
+        goal_orientation=np.array(
+            [
+                trans.transform.rotation.x,
+                trans.transform.rotation.y,
+                trans.transform.rotation.z,
+                trans.transform.rotation.w,
+            ]
+        ),
         total_time=9,
     )
 
-    path = MotionPath(limb, kin, ik_solver, trajectory)
-    return path.to_robot_trajectory(num_waypoints, True)
+    # path = MotionPath(limb, kin, ik_solver, trajectory)
+    # return path.to_robot_trajectory(num_waypoints, True)
 
 
 def get_controller(controller_name, limb, kin):
     if controller_name == "open_loop":
         controller = FeedforwardJointVelocityController(limb, kin)
     elif controller_name == "pid":
-        Kp = 0.1 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
+        # Kp = 0.1 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
+        Kp = 0.05 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
         Kd = 0.02 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
         Ki = 0.02 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
         Kw = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9])

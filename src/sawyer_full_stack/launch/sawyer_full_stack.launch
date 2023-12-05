@@ -10,7 +10,7 @@
 
     <include file="$(find sawyer_full_stack)/launch/custom_sawyer_tuck.launch" />
 
-    <node name="sawyer_full_stack" pkg="sawyer_full_stack" type="sawyer_target_card_server.py">
+    <node name="sawyer_full_stack" pkg="sawyer_full_stack" type="sawyer_target_card_server.py" output="screen">
     </node>
 
 </launch>

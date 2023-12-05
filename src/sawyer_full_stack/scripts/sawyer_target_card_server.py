@@ -13,7 +13,7 @@ from utils.shared import *
 
 from set_msgs.srv import TargetPosition
 
-AR_MARKER = "ar_marker_6"
+AR_MARKER = "ar_marker_4"
 CONTROLLER = "pid"
 LOOP_RATE = 200 # ms
 TIMEOUT = 60 # seconds

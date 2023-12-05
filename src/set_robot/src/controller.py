@@ -14,7 +14,7 @@ NUMBERS = ['One', 'Two', 'Three']
 SHADINGS = ['Solid', 'Striped', 'Outlined']
 
 DEFAULT_STATE = Point(0, 0, 0.5) # DANGER -- NEED TO SET
-TABLE_OFFSET = 1 # DANGER -- NEED TO SET
+TABLE_OFFSET = 0.1 # DANGER -- NEED TO SET
 DROPOFF_POINT = Point(2, 2, 0.5) # DANGER -- NEED TO SET
 
 def play_set(gripper):

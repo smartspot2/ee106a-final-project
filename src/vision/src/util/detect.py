@@ -182,7 +182,6 @@ def find_card_center(contour, tag_number):
     camera_model.fromCameraInfo(camera_info)
 
     unit_ray = camera_model.projectPixelTo3dRay((u, v))
-    print(unit_ray)
 
     tfBuffer = tf2_ros.Buffer()
     tfListener = tf2_ros.TransformListener(tfBuffer)
@@ -200,31 +199,31 @@ def find_card_center(contour, tag_number):
 
     # transformation matrix from AR marker, as well as its inverse
 
-    x, y, z = (
-        trans.transform.translation.x,
-        trans.transform.translation.y,
-        trans.transform.translation.z,
-    )
-
-    cam2ar = tf.transformations.quaternion_matrix([
+    ar2cam = tf.transformations.quaternion_matrix([
         trans.transform.rotation.x,
         trans.transform.rotation.y,
         trans.transform.rotation.z,
         trans.transform.rotation.w,
     ])
 
-    ar2cam = np.linalg.inv(cam2ar)
+    ar2cam[:3, 3] = [
+        trans.transform.translation.x,
+        trans.transform.translation.y,
+        trans.transform.translation.z,
+    ]
+
+    cam2ar = np.linalg.inv(ar2cam)
 
     # normal to plane, point on the plane
-    normal = ar2cam @ np.array([[0, 0, 1, 0]]).T
-    p0 = ar2cam @ np.array([0, 0, 0, 1]).T
+    normal = ar2cam @ np.array([0, 0, 1, 0])
+    p0 = ar2cam @ np.array([0, 0, 0, 1])
 
     # origin and direction of ray
-    o = np.array([[0, 0, 0, 1]]).T
-    d = np.array([*unit_ray, 0]).T
+    o = np.array([0, 0, 0, 1])
+    d = np.array([*unit_ray, 0])
 
     # point of intersection in camera space
-    p = o + d * (((p0 - o) @ normal) / (d @ normal))
+    p = o + d * (np.dot(p0 - o, normal) / np.dot(d, normal))
 
     return cam2ar @ p
 
