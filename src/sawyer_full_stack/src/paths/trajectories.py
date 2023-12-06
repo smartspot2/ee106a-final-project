@@ -206,7 +206,8 @@ class LinearTrajectory(Trajectory):
             desired body-frame velocity of the end effector
         """
         if time <= self.total_time / 2.0:
-            linear_vel = np.minimum(self.acceleration * time, self.v_max)
+            # linear_vel = np.minimum(self.acceleration * time, self.v_max)
+            linear_vel = self.v_max
         else:
             _t = time - self.total_time / 2.0
             linear_vel = self.v_max - np.minimum(self.acceleration * _t, self.v_max)

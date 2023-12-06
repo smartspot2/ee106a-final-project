@@ -12,6 +12,7 @@ from paths.paths import MotionPath
 from paths.trajectories import LinearTrajectory
 from utils.utils import *
 
+MOVE_TIME = 4.0 # seconds
 
 def tuck():
     """
@@ -46,7 +47,7 @@ def lookup_tag(tag_name):
     return lookup_transform("base", tag_name).transform
 
 
-def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_goal):
+def get_trajectory_ar_frame(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_goal, offset, z_pos):
     """
     Paramters:
         tag_transform - transformation between base and AR tag (rotation + position)
@@ -62,6 +63,7 @@ def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_go
     rospy.loginfo(f"Current Position: {current_position}")
     rospy.loginfo(f"tag_transform {tag_transform}")
 
+    
     tag_to_base = tf.transformations.quaternion_matrix(
         [
             tag_transform.rotation.x,
@@ -94,28 +96,61 @@ def get_trajectory(limb, kin, ik_solver, tag_transform, num_waypoints, ar_tag_go
 
     rospy.loginfo(f"ar_tag_goal_hom {ar_tag_goal_hom}")
 
-    target_pos = tag_to_base @ ar_tag_goal_hom
+    target_pos = tag_to_base @ ar_tag_goal_hom + np.array([*offset, 0])
+    target_pos[2] = z_pos # hard-coded z position
 
+    print("Offset:", offset)
     print("Target Position:", target_pos)
     trajectory = LinearTrajectory(
         start_position=current_position,
         goal_position=target_pos[:3],
         # goal_position=np.array([0.576, -0.047, 0.0]),
         # goal_position=current_position,
-        # goal_orientation=np.array([0.5, -0.5, 0.5, -0.5]),
-        goal_orientation=np.array(
-            [
-                trans.transform.rotation.x,
-                trans.transform.rotation.y,
-                trans.transform.rotation.z,
-                trans.transform.rotation.w,
-            ]
-        ),
-        total_time=9,
+        goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        # goal_orientation=np.array(
+        #     [
+        #         trans.transform.rotation.x,
+        #         trans.transform.rotation.y,
+        #         trans.transform.rotation.z,
+        #         trans.transform.rotation.w,
+        #     ]
+        # ),
+        total_time=MOVE_TIME,
     )
 
-    # path = MotionPath(limb, kin, ik_solver, trajectory)
-    # return path.to_robot_trajectory(num_waypoints, True)
+    path = MotionPath(limb, kin, ik_solver, trajectory)
+    return path.to_robot_trajectory(num_waypoints, True)
+
+
+def get_trajectory(limb, kin, ik_solver, num_waypoints, goal, offset=[0, 0, 0]):
+    """
+    Paramters:
+        goal - goal position in base frame
+    """
+
+    trans = lookup_transform("base", "right_gripper_tip")
+    rospy.loginfo(f"transformation {trans}")
+
+    current_position = np.array(
+        [getattr(trans.transform.translation, dim) for dim in ("x", "y", "z")]
+    )
+    rospy.loginfo(f"Current Position: {current_position}")
+
+    rospy.loginfo(f"goal {goal}")
+
+    target_pos = goal + offset
+
+    print("Offset:", offset)
+    print("Target Position:", target_pos)
+    trajectory = LinearTrajectory(
+        start_position=current_position,
+        goal_position=target_pos,
+        goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        total_time=MOVE_TIME,
+    )
+
+    path = MotionPath(limb, kin, ik_solver, trajectory)
+    return path.to_robot_trajectory(num_waypoints, True)
 
 
 def get_controller(controller_name, limb, kin):
@@ -123,9 +158,11 @@ def get_controller(controller_name, limb, kin):
         controller = FeedforwardJointVelocityController(limb, kin)
     elif controller_name == "pid":
         # Kp = 0.1 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
-        Kp = 0.05 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
-        Kd = 0.02 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
-        Ki = 0.02 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
+        Kp = 0.01 * np.array([0.4, 2, 1.7, 1.5, 2, 2, 3])
+        # Kd = 0.02 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
+        Kd = 0.03 * np.array([2, 1, 2, 0.5, 0.8, 0.8, 0.8])
+        # Ki = 0.02 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
+        Ki = 0.04 * np.array([1.4, 1.4, 1.4, 1, 0.6, 0.6, 0.6])
         Kw = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9])
         controller = PIDJointVelocityController(limb, kin, Kp, Ki, Kd, Kw)
     else:

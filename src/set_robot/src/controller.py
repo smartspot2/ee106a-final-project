@@ -13,9 +13,8 @@ COLORS = ['Red', 'Purple', 'Green']
 NUMBERS = ['One', 'Two', 'Three']
 SHADINGS = ['Solid', 'Striped', 'Outlined']
 
-DEFAULT_STATE = Point(0, 0, 0.5) # DANGER -- NEED TO SET
-TABLE_OFFSET = 0.1 # DANGER -- NEED TO SET
-DROPOFF_POINT = Point(2, 2, 0.5) # DANGER -- NEED TO SET
+DEFAULT_STATE = Point(0.7, -0.1, 0.0)
+DROPOFF_POINT = Point(0.7, 0.06, 0.0)
 
 def play_set(gripper):
     print("Let's play Set!")
@@ -47,16 +46,16 @@ def play_set(gripper):
             print(' | '.join([get_card_name(card) for card in card_set]))
             print("Hit ENTER to execute the queued command, anything else to stop everything:")
 
-            continue_movement = input("Move to default state -- DANGER: THIS WAS RANDOMLY ASSIGNED TEMPORARILY ")
+            continue_movement = input("Move to default state")
             if continue_movement == "":
-                move_to(DEFAULT_STATE)
+                gripper.close()
+                move_to(DEFAULT_STATE, use_ar_frame=False)
 
             for card in card_set:
                 continue_movement = input("Move to card ")
                 if continue_movement == "":
-                    card.position.z += TABLE_OFFSET
                     print(f"Moving to {card}")
-                    move_to(card.position)
+                    move_to(card.position, use_ar_frame=True)
                 else:
                     return
                 
@@ -66,10 +65,10 @@ def play_set(gripper):
                 else:
                     return
                 
-                continue_movement = input("Move to drop off point -- DANGER: THIS WAS RANDOMLY ASSIGNED TEMPORARILY ")
+                continue_movement = input("Move to drop off point")
                 if continue_movement == "":
                     print(f"Moving to {DROPOFF_POINT}")
-                    move_to(DROPOFF_POINT)
+                    move_to(DROPOFF_POINT, use_ar_frame=False)
                 else:
                     return
                 
@@ -79,10 +78,10 @@ def play_set(gripper):
                 else:
                     return
                 
-                continue_movement = input("Move to default state -- DANGER: THIS WAS RANDOMLY ASSIGNED TEMPORARILY ")
+                continue_movement = input("Move to default state")
                 if continue_movement == "":
                     print(f"Moving to {DEFAULT_STATE}")
-                    move_to(DEFAULT_STATE)
+                move_to(DEFAULT_STATE, use_ar_frame=False)
             
             continue_game = input("Done! Place three new cards if there are less than 12 cards on the board. Hit ENTER to play another round, or anything else to finish. ")
             if continue_game == "":
@@ -108,10 +107,10 @@ def get_card_data():
     return response.cards, response.set
 
 @rospy_error_wrapper
-def move_to(position):
+def move_to(position, use_ar_frame=True):
     sawyer_full_stack_proxy = rospy.ServiceProxy("/sawyer_target_card", TargetPosition)
     rospy.loginfo("Moving")
-    sawyer_full_stack_proxy(position)
+    sawyer_full_stack_proxy(position, use_ar_frame)
 
 def get_card_name(card):
     return '-'.join([SHAPES[card.shape], COLORS[card.color], NUMBERS[card.number], SHADINGS[card.shading]])

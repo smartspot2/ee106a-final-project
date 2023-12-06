@@ -102,8 +102,8 @@ class MotionPath:
 
         # Add desired pose for inverse kinematics
         ik_request.pose_stamp.append(pose_stamped)
-        # Request inverse kinematics from base to "right_hand" link
-        ik_request.tip_names.append('right_hand')
+        # Request inverse kinematics from base to "right_gripper_tip" link
+        ik_request.tip_names.append('right_gripper_tip')
 
         try:
             rospy.wait_for_service(service_name, 5.0)
