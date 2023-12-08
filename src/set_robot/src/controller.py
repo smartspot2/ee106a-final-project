@@ -7,7 +7,7 @@ from geometry_msgs.msg import Point
 
 from set_msgs.msg import Card
 from set_msgs.srv import CardData, TargetPosition, SolveSet
-from util.head_display import display_file
+from util.head_display import display_file, display_series, clear_display
 
 SHAPES = ["oval", "squiggle", "diamond"]
 COLORS = ["red", "purple", "green"]
@@ -26,6 +26,8 @@ def play_set(gripper):
     while True:
         print(f"Round {round_number}")
 
+        display_file("display_images/looking.png")
+
         print("Getting cards and finding set...")
         cards, card_set_indices = get_card_data()
         print(f"Got {len(cards)} cards!")
@@ -43,6 +45,7 @@ def play_set(gripper):
         else:
             assert len(card_set_indices) == 3, f"The algorithm didn't return a valid set, {len(card_set_indices)} card(s) were returned"
             print("---------------------------------- SET! ----------------------------------")
+            display_file("display_images/set.png")
             
             card_set = [cards[i] for i in card_set_indices]
             
@@ -54,8 +57,10 @@ def play_set(gripper):
                 gripper.close()
                 move_to(DEFAULT_STATE, use_ar_frame=False)
 
-            for card in card_set:
-                display_file(f"labeled_images/{get_card_name(card)}.jpg")
+            card_files = [f"labeled_images/{get_card_name(card)}.jpg" for card in card_set]
+
+            for card_index, card in enumerate(card_set):
+                display_series(card_files, index=card_index)
                 continue_movement = input("Move to card ")
                 if continue_movement == "":
                     print(f"Moving to {card}")

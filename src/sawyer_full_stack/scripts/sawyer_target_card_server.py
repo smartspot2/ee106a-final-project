@@ -20,7 +20,7 @@ TIMEOUT = 60  # seconds
 NUM_WAYPOINTS = 5  # for robot trajectory
 
 # CARD_PICKUP_OFFSET = [-0.0, 0.02, 0.0]  # ada
-CARD_PICKUP_OFFSET = [-0.0, 0.0, 0.0]  # azula
+CARD_PICKUP_OFFSET = [0.01, 0.0, 0.0]  # azula
 # AR_Z_POS = -0.13 # ada
 AR_Z_POS = -0.135 # azula
 
