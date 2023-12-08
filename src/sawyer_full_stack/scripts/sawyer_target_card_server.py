@@ -19,8 +19,10 @@ LOOP_RATE = 200  # ms
 TIMEOUT = 60  # seconds
 NUM_WAYPOINTS = 10  # for robot trajectory
 
-CARD_PICKUP_OFFSET = [-0.0, 0.02, 0.0]
-AR_Z_POS = -0.13 # -0.14
+# CARD_PICKUP_OFFSET = [-0.0, 0.02, 0.0]  # ada
+CARD_PICKUP_OFFSET = [-0.0, 0.0, 0.0]  # azula
+# AR_Z_POS = -0.13 # ada
+AR_Z_POS = -0.135 # azula
 
 # Setup
 rospy.init_node("sawyer_target_card_server")

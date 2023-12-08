@@ -228,7 +228,7 @@ class Controller:
             # Sleep for a bit (to let robot move)
             r.sleep()
 
-            if current_index >= max_index:
+            if current_index >= 0.7 * max_index:
                 self.stop_moving()
                 break
 

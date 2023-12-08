@@ -154,7 +154,7 @@ def vision_callback(_request, model, tag_number):
     contours = find_contours(image)
 
     # find cards
-    cards = detect_cards(image, contours, variations=5)
+    cards = detect_cards(image, contours, variations=3)
 
     # classify cards
     labels = []

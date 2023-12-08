@@ -7,14 +7,17 @@ from geometry_msgs.msg import Point
 
 from set_msgs.msg import Card
 from set_msgs.srv import CardData, TargetPosition, SolveSet
+from util.head_display import display_file
 
-SHAPES = ['Ovals', 'Squiggles', 'Diamonds']
-COLORS = ['Red', 'Purple', 'Green']
-NUMBERS = ['One', 'Two', 'Three']
-SHADINGS = ['Solid', 'Striped', 'Outlined']
+SHAPES = ["oval", "squiggle", "diamond"]
+COLORS = ["red", "purple", "green"]
+COUNTS = ["1", "2", "3"]
+SHADES = ["solid", "stripe", "outline"]
 
-DEFAULT_STATE = Point(0.7, -0.1, 0.0)
-DROPOFF_POINT = Point(0.7, 0.06, 0.0)
+# DEFAULT_STATE = Point(0.7, -0.1, 0.0)  # ada
+DEFAULT_STATE = Point(0.75, 0.11, 0.0)  # azula
+# DROPOFF_POINT = Point(0.7, 0.06, 0.0)  # ada
+DROPOFF_POINT = Point(0.78, -0.25, 0.05)  # azula
 
 def play_set(gripper):
     print("Let's play Set!")
@@ -52,6 +55,7 @@ def play_set(gripper):
                 move_to(DEFAULT_STATE, use_ar_frame=False)
 
             for card in card_set:
+                display_file(f"labeled_images/{get_card_name(card)}.jpg")
                 continue_movement = input("Move to card ")
                 if continue_movement == "":
                     print(f"Moving to {card}")
@@ -113,7 +117,7 @@ def move_to(position, use_ar_frame=True):
     sawyer_full_stack_proxy(position, use_ar_frame)
 
 def get_card_name(card):
-    return '-'.join([SHAPES[card.shape], COLORS[card.color], NUMBERS[card.number], SHADINGS[card.shading]])
+    return '-'.join([SHAPES[card.shape], COLORS[card.color], COUNTS[card.number], SHADES[card.shading]])
 
 def calibrate_robot():
     rp = intera_interface.RobotParams()

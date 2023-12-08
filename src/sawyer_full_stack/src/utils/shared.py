@@ -106,7 +106,8 @@ def get_trajectory_ar_frame(limb, kin, ik_solver, tag_transform, num_waypoints, 
         goal_position=target_pos[:3],
         # goal_position=np.array([0.576, -0.047, 0.0]),
         # goal_position=current_position,
-        goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        goal_orientation=np.array([-0.5, 0.5, -0.5, 0.5]),
+        # goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
         # goal_orientation=np.array(
         #     [
         #         trans.transform.rotation.x,
@@ -145,7 +146,8 @@ def get_trajectory(limb, kin, ik_solver, num_waypoints, goal, offset=[0, 0, 0]):
     trajectory = LinearTrajectory(
         start_position=current_position,
         goal_position=target_pos,
-        goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        # goal_orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        goal_orientation=np.array([-0.5, 0.5, -0.5, 0.5]),
         total_time=MOVE_TIME,
     )
 
