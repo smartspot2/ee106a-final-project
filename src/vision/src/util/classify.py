@@ -12,7 +12,7 @@ import torch
 
 from .labels import deserialize_label, label_to_string
 
-CONFIDENCE_THRESH = 0.5
+CONFIDENCE_THRESH = 0.4
 
 
 def classify(model, card) -> Union[str, None]:

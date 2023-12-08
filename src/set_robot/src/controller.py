@@ -17,7 +17,7 @@ SHADES = ["solid", "stripe", "outline"]
 # DEFAULT_STATE = Point(0.7, -0.1, 0.0)  # ada
 DEFAULT_STATE = Point(0.75, 0.11, 0.0)  # azula
 # DROPOFF_POINT = Point(0.7, 0.06, 0.0)  # ada
-DROPOFF_POINT = Point(0.78, -0.25, 0.05)  # azula
+DROPOFF_POINT = Point(0.78, -0.2, 0.05)  # azula
 
 def play_set(gripper):
     print("Let's play Set!")

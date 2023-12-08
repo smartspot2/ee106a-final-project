@@ -40,7 +40,7 @@ class MotionPath:
         self.trajectory = trajectory
         self.previous_computed_ik = get_joint_positions(self.limb)
 
-    def to_robot_trajectory(self, num_waypoints=300, jointspace=True, extra_points = 10):
+    def to_robot_trajectory(self, num_waypoints=300, jointspace=True, extra_points = 3):
         """
         Parameters
         ----------

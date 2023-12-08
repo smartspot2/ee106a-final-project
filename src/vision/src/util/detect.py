@@ -298,6 +298,6 @@ def detect_cards(image, contours, card_shape=(180, 280), variations=1, preproces
                 rectified_cards.append(dst_variations)
         else:
             # don't preprocess cards; just return the raw warped image
-            rectified_cards.append(dst)
+            rectified_cards.append([dst])
 
     return rectified_cards

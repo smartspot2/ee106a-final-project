@@ -17,7 +17,7 @@ AR_MARKER = "ar_marker_3"
 CONTROLLER = "pid"
 LOOP_RATE = 200  # ms
 TIMEOUT = 60  # seconds
-NUM_WAYPOINTS = 10  # for robot trajectory
+NUM_WAYPOINTS = 5  # for robot trajectory
 
 # CARD_PICKUP_OFFSET = [-0.0, 0.02, 0.0]  # ada
 CARD_PICKUP_OFFSET = [-0.0, 0.0, 0.0]  # azula
@@ -34,6 +34,7 @@ planner = PathPlanner("right_arm")  # moveit! wrapper (used to go to start posit
 controller = get_controller(CONTROLLER, limb, kin)
 # tuck()
 tag_pos = lookup_tag(AR_MARKER)
+rospy.loginfo("Done looking up tag!")
 
 
 def sawyer_target_card_callback(request):
