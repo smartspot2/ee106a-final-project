@@ -1,0 +1,207 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>  
+    div.padded {  
+      padding-top: 0px;  
+      padding-right: 100px;  
+      padding-bottom: 0.25in;  
+      padding-left: 100px;  
+    }  
+  </style> 
+<title>Set with Sawyer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+
+<script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      }
+    };
+  </script>
+  <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+  </script>
+  <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+<br />
+<h1 align="middle">Group 27 — Set</h1>
+    <div class="padded">
+
+        <h3>Overview</h3>
+        Our goal is to make the Sawyers play a game of set. The robot will be able to accurately detect cards, find a set, and pick and place the cards that it finds.
+
+        <div align="middle">
+            <video height="400" controls>
+                <source src="images/demo.mp4" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <h3>Architecture</h3>
+
+       
+        <p>
+            Here is an architecture that maps out how the robot's nodes communicate with each other.
+        </p>
+        <div align="middle">
+            <iframe align="middle" style="border: 1px solid rgba(0, 0, 0, 0.1);" width="800" height="450" src="https://www.figma.com/embed?embed_host=share&url=https%3A%2F%2Fwww.figma.com%2Ffile%2F1h9wrjvC3mcu7zEkL4MP32%2FEECS-C106A-Final-Project-Architecture%3Ftype%3Ddesign%26node-id%3D0%253A1%26mode%3Ddesign%26t%3DG3X2wWzgB20piQuV-1" allowfullscreen></iframe>
+        <br>
+        </div>
+
+        <p>The <code>set_robot</code> node acts as a controller. It runs the game loop, and calls services that operate each module of the robot. The vision node processes the image obtained by the camera, isolates the cards in the image, then cleans and processes them. It then returns  the coordinates of the centers of each card in the set in AR tag coordinates. <code>sawyer_full_stack</code> is responsible for providing sevices involving path planning and trajectories.</p>
+
+
+        <h3>Controller</h3>
+
+        <p>
+            The main role fo the controller is to call the vision node to get card positions, then move the cards using the <code>sawyer_full_stack</code> node. A human interacts with the robot through the command line. The trajectories that it finds are reported through RViz and the human operator must confirm the safety of the trajectory before the robot can move. The general loop is as follows:
+        </p>
+        <ul>
+            <li>Call the vision service and get the centers of cards in the AR tag's coordinate frame.</li>
+            <li>If there was a set found, it will call SET.</li>
+            <li>If there was no set found, cards will be replaced and the robot will call the vision service again.</li>
+            <li>Once there is a set found, and we have three coordinates in the AR tag frame, we plan and move the cards using the <code>sawyer_full_stack</code> node.</li>
+        </ul>
+        <br>
+
+        <h3>Vision</h3>
+
+        <p> The robot's first task is to find the set in the first place. It first takes an image of the set board. Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                    <img src="images/source.jpg" align="middle" width="400px"/>
+                    <figcaption>Source image</figcaption>
+                  </td>
+                <td>
+                  <img src="images/canny.jpg" align="middle" width="400px"/>
+                  <figcaption>Binary image after Canny edge filter</figcaption>
+                </td>
+              </tr>
+            </table>
+          </div>
+          <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/image-plot.jpg" align="middle" width="800px"/>
+                  <figcaption>RGB space that k-means was applied in</figcaption>
+                </td>
+              </tr>
+            </table>
+        </div>
+        <br>
+        <p>The set of contours we find is very noisy. We first filter for closed contours such that the remaining contours are guaranteed to form polygons. Then, we use <code>cv2.approxPolyDP</code> to approximate each polygon to a quadrilateral. Finally, in order to filter out the shapes in the images themselves, we filter contours based on polygon size. The result is that we're able to have contours only representing the card edges.</p>
+        <p>The camera is placed at an angle to the table. As a result, the pespective of the cards is warped, foreshortened towards the back. We use rectification to fix this issue. We use the corners of each quadrilateral as correspondence points to a rectified quadrilateral that is predefined in both size and shape. We approximate the length of each edge in perspective in order to find the correct correspondence points. We then compute a homography matrix and perform an inverse warp to get the rectified card images.</p>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/recified.png" align="middle" width="800px"/>
+                  <figcaption>Original image v.s. rectified cards</figcaption>
+                </td>
+              </tr>
+            </table>
+        </div>
+        <p>The next step after rectification is classification. We used a neural network to classify cards. In order to increase the robustness of our neural network, we made the following preprocessing steps.</p>
+        <ul>
+            <li>Low Pass Filter: Blurring the cards, which removes a lot of high frequency noise from them. Neural networks tend to perform poorly in the presence of such noise.</li>
+            <li>Color Depth Reduction: By reducing the number of possible colors of each image, we can reduce small variances and noise caused by slightly different colored pixels. We used $k$-means clustering in the RGB colorspace, replacing each cluster with its mean value. </li>
+            <li>White balancing: the lighting conditions are far from sterile — as such, we take the two most common colors in each image and make them pure white. Generally, the shapes do not take up enough of the color space to be considered in the top two most common colors.</li>
+        </ul>
+        <p>The dataset we used for both training and validation was taken manually. In order to more easily take data, we had one person set up cards and one person verify that the cards were in frame and use a python script to take a snapshop of the cards using the Logitech camera.</p>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/dataset-example.jpg" align="middle" width="800px"/>
+                  <figcaption>Example data-collecting snapshot</figcaption>
+                </td>
+              </tr>
+            </table>
+        </div>
+        <p>In comparison to most supervised learning datasets, our dataset was quite small, so it was augmented through various transformations.</p>
+        <ul>
+            <li>Resizing — robustness against scaling.</li>
+            <li>Cropping — robustness against translations</li>
+            <li>Rotation — robustness against mistmatch between discovered contours and actual card edges</li>
+            <li>Color jitter — robustness against color jitter and lighting conditions</li>
+        </ul>
+        <p>We used PyTorch for the NN's backend, with the following structure:</p>
+        <ul>
+            <li>64-channel initial block</li>
+            <ul>
+                <li>Convolution, 7x7 kernel, 2 stride, 3 padding, no bias</li>
+                <li>Batch norm + ReLU</li>
+                <li>Max Pooling, 3x3 kernel, 2 stride, 1 padding</li>
+            </ul>
+            <li>64-channel block</li>
+            <ul>
+                <li>Convolution, 3x3 kernel, 2 stride, 1 padding</li>
+                <li>Batch norm + ReLU</li>
+                <li>Convolution, 3x3 kernel, 1 padding</li>
+                <li>Batch norm</li>
+                <li>Residual connection</li>
+                <li>ReLU</li>
+            </ul>
+            <li>128-channel block, downsampling</li>
+            <li>256-channel block</li>
+        </ul>
+        <p>We used a batch size of 65, initial learning rate of 0.0001, learning decay of 0.98, and 200 epochs.</p>
+        <p>At this point, we have all the information we need except for the positions of the cards themselves. We compute this based on the information we have; that is, we know the camera intrinsics, the camera frame, the size of the AR tag, as well as the AR tag frame. A schematic is depicted below.</p>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/coord.png" align="middle" width="800px"/>
+                  <figcaption>Coordinate Transform Schematic</figcaption>
+                </td>
+              </tr>
+            </table>
+        </div>
+        <p>We can get the camera-to-AR tag matrix using <code>tf2</code>. Since we know the image coordinate and the location of the origin of the camera coordinate frame, we can also compute the unit ray is created between them. Then, we intersect the ray with the AR tag's $xz$ plane with the following equation:</p>
+        <div align="middle">
+            $\vec{p} = \vec{o} + \vec{d} * \frac{(\vec{p_0} - \vec{o}) \cdot \vec{n}}{\vec{d} \cdot \vec{n}}$
+        </div>
+        <p> Where $\vec{o}$ is origin of the ray, $\vec{d}$ is the direction, $\vec{p_0}$ is a point on the AR tag plane, and $\vec{n}$ is a unit vector normal to the plane. All calculations are done in the camera frame — we convert to the AR tag frame at the very end.</p>
+        <h3>Manipulation</h3>
+        <p>Our goal is to pick and place the three cards that we got from the vision service. We set a default pose, move to a card, move back to the default pose, then loop until we have picked and placed all three cards. We use PID for error correction. This is all taken care of by the <code>sawyer_full_stack</code> service.</p>
+        <p>Picking up cards with the regular Sawyer gripper is infeasible — we designed a custom gripper of our own.</p>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/gripper.gif" align="middle" width="800px"/>
+                  <figcaption>Custom Gripper</figcaption>
+                </td>
+              </tr>
+            </table>
+        </div>
+        <p>The gripper was designed in Blender and 3D printed. The smaller piece has a piece of tape attached to the end, allowing the card to stick to it. When we want to drop a card, we move the gripper to the closed position so that the wings on the other piece of the gripper push down on and release the card from the tape.</p>
+        <h3>Solving Set</h3>
+        <p>To solve set, we simply assign a value 1, 2, or 3 to each variation. For each possible set, if the sum of the values modulo 3 is 0, then we know it is a valid set. We repeat this for all permutations — this algorithm is constant time because there is an upper bound on the number of cards in play.</p>
+        <h3>Results</h3>
+        <p>Our project achieved all the goals we set for it. Further improvements would be to remove the human element of replacing cards, which is just a matter of adding more waypoints. Our initial design of the gripper used a suction cup instead of tape, which was not effective for grabbing cards. We also considered many white balancing algorithms, such as contrast stretching and grayworld assumption, but the k-means strategy worked the best.</p>
+        <h3>Cleaning</h3>
+        <div align="middle">
+            <table style="width:100%">
+              <tr align="center">
+                <td>
+                  <img src="images/clean1.jpeg" align="middle" width="400px"/>
+                  <figcaption></figcaption>
+                </td>
+                <td>
+                    <img src="images/clean2.jpeg" align="middle" width="400px"/>
+                    <figcaption></figcaption>
+                  </td>
+              </tr>
+            </table>
+        </div>
+</body>
+</html>
+
