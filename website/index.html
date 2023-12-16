@@ -35,18 +35,11 @@
         <p>Our goal is to make the Sawyers play a game of set. We're interested in this project because it heavily relies on computer vision and extrapolating information from an image to determine real-world coordinate with less assistance from the AR tags as compared to labs. The robot will be able to accurately detect cards, find a set, and pick and place the cards that it finds. Real-world robotics often combines computer vision, path planning, and custom hardware to automate work and perform tasks faster than a human can, just like our project does with Set.
         </p>
 
-
-
-        <div align="middle">
-            <video height="400" controls>
-                <source src="images/demo.mp4" type="video/mp4">
-              Your browser does not support the video tag.
-            </video>
-        </div>
-
         <h2>Design</h2>
-        <h3>Architecture</h3>
 
+        Overall, the design criteria for our project is to play a game of Set reliably. Our desired functionality is for the robot to be able to identify a set and pick up those cards.
+
+        <h3>Architecture</h3>
        
         <p>
             Here is an architecture that maps out how the robot's nodes communicate with each other.
@@ -56,24 +49,37 @@
         <br>
         </div>
 
-        <p>The <code>set_robot</code> node acts as a controller. It runs the game loop, and calls services that operate each module of the robot. The vision node processes the image obtained by the camera, isolates the cards in the image, then cleans and processes them. It then returns  the coordinates of the centers of each card in the set in AR tag coordinates. <code>sawyer_full_stack</code> is responsible for providing sevices involving path planning and trajectories.</p>
-
+        <p>The <code>set_robot</code> node acts as a controller. It runs the game loop, and calls services that operate each module of the robot. The <code>vision</code> node processes the image obtained by the camera, isolates the cards in the image, then cleans and processes them. It then returns the coordinates of the centers of each card in the set in AR tag coordinates. The <code>controller</code> node will take these coordinates and feed them to the <code>sawyer_full_stack</code> node, interspersing coordinates to a default state and drop point, and commands to pick up and drop the card using our custom gripper once it is in position. The <code>sawyer_full_stack</code> node plans trajectories, creates waypoints, and applies a PID controller so the robot can smoothly move between the points it is given.</p>
+        
+        <h3>Design Choices</h3>
+        
+        <p>For vision, we chose to use a neural net to identify cards because there are only a limited number of cards in the set but various changes to the images due to the environment (noise, lighting, etc.). A neural net would do well at fitting to a task like this. We also chose to rectify the cards so the neural net could have more consistent data to train on.</p>
+        <p>For the robot movement and card manipulation, we originally planned to use a suction cup to pick up cards, as pneumatics for this simple task seemed like overkill and were recommended against in our first meeting with the TAs. We ended up switching to just using tape because it proved to be more reliable than the suction cup. For controls, we fiddled around with PID coefficients a little bit, starting with the coefficients from the labs, to get smoother and slower motion for safety reasons.</p>
+        <p>Our design choices prove to be decently reliable. As long as the cards are not overlapping and within the view of the external camera, the AR tag is within view of the both the robot camera and the external camera, and the robot can reach all of the cards, the robot can identify a set with high accuracy and grab all the cards. There are some flaws with our system in a real-world setting, such as the tape getting less sticky over time and some empirically-found offsets to counteract the unreliability of the external camera, but overall the robot works great.</p>
 
         <h2>Implementation</h2>
-        <h3>Controller</h3>
+        <h3>Controller (<code>controller</code> node)</h3>
 
         <p>
-            The main role fo the controller is to call the vision node to get card positions, then move the cards using the <code>sawyer_full_stack</code> node. A human interacts with the robot through the command line. The trajectories that it finds are reported through RViz and the human operator must confirm the safety of the trajectory before the robot can move. The general loop is as follows:
+            The main role fo the controller (<code>src/set_robot/src/controller.py</code>) is to call the <code>vision</code> node to get card positions, then move the cards using the <code>sawyer_full_stack</code> node. A human interacts with the robot through the command line. The trajectories that it finds are reported through RViz and the human operator must confirm the safety of the trajectory before the robot can move. The general loop is as follows:
         </p>
-        <ul>
+        <ol>
             <li>Call the vision service and get the centers of cards in the AR tag's coordinate frame.</li>
-            <li>If there was a set found, it will call SET.</li>
-            <li>If there was no set found, cards will be replaced and the robot will call the vision service again.</li>
-            <li>Once there is a set found, and we have three coordinates in the AR tag frame, we plan and move the cards using the <code>sawyer_full_stack</code> node.</li>
-        </ul>
+            <li>If there was no set found, more cards will be placed and the robot will go back to the start of the loop.</li>
+            <li>If there was a set found, it will call SET. Using the <code>sawyer_full_stack</code> node, for each card,</li>
+            <ol>
+                <li>Move to a predetermined starting point.</li>
+                <li>Move to the card with the coordinates provided by the vision service (plus an empirically-found offset to counteract the inconsistency of the external camera).</li>
+                <li>Open the gripper and pick up the card.</li>
+                <li>Move to a predetermined dropoff point.</li>
+                <li>Close the gripper and drop off the card.</li>
+            </ol>
+            <li>Prompt the human to replace the cards.</li>
+            <li>Go back to the start of the loop.</li>
+        </ol>
         <br>
 
-        <h3>Vision</h3>
+        <h3>Vision (<code>vision</code> node)</h3>
 
         <p> The robot's first task is to find the set in the first place. It first takes an image of the set board. Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
         <div align="middle">
@@ -174,8 +180,14 @@
             $\vec{p} = \vec{o} + \vec{d} * \frac{(\vec{p_0} - \vec{o}) \cdot \vec{n}}{\vec{d} \cdot \vec{n}}$
         </div>
         <p> Where $\vec{o}$ is origin of the ray, $\vec{d}$ is the direction, $\vec{p_0}$ is a point on the AR tag plane, and $\vec{n}$ is a unit vector normal to the plane. All calculations are done in the camera frame — we convert to the AR tag frame at the very end.</p>
+        
+        <h3>Solving Set (<code>vision</code> node)</h3>
+        <p>To solve set, we simply assign a value 1, 2, or 3 to each variation. For each possible set, if the sum of the values modulo 3 is 0, then we know it is a valid set. We repeat this for all permutations — this algorithm is constant time because there is an upper bound on the number of cards in play.</p>
+        
+        <h3>Trajectory Planning (<code>sawyer_full_stack</code> node)</h3>
+        To plan motion, we took code from the labs and refactored it to receive commands from the controller node. This code calculates linear waypoints between the two points it is trying to move between and moves between these waypoints, error correcting using a PID controller.
+
         <h3>Manipulation</h3>
-        <p>Our goal is to pick and place the three cards that we got from the vision service. We set a default pose, move to a card, move back to the default pose, then loop until we have picked and placed all three cards. We use PID for error correction. This is all taken care of by the <code>sawyer_full_stack</code> service.</p>
         <p>Picking up cards with the regular Sawyer gripper is infeasible — we designed a custom gripper of our own.</p>
         <div align="middle">
             <table style="width:100%">
@@ -188,12 +200,20 @@
             </table>
         </div>
         <p>The gripper was designed in Blender and 3D printed. The smaller piece has a piece of tape attached to the end, allowing the card to stick to it. When we want to drop a card, we move the gripper to the closed position so that the wings on the other piece of the gripper push down on and release the card from the tape.</p>
-        <h3>Solving Set</h3>
-        <p>To solve set, we simply assign a value 1, 2, or 3 to each variation. For each possible set, if the sum of the values modulo 3 is 0, then we know it is a valid set. We repeat this for all permutations — this algorithm is constant time because there is an upper bound on the number of cards in play.</p>
-        <h2>Results</h2>
-        <p>Our project achieved all the goals we set for it. Further improvements would be to remove the human element of replacing cards, which is just a matter of adding more waypoints. Our initial design of the gripper used a suction cup instead of tape, which was not effective for grabbing cards. We also considered many white balancing algorithms, such as contrast stretching and grayworld assumption, but the k-means strategy worked the best.</p>
-        <p>In terms of difficulties, the main two that we ran into were glare caused by lights turned on in a room opposite from the lab and the gripper not reliably picking up cards with the original gripper. The solutions we came up with could be considered temporary — we used tape instead of a suction cup and piece of foam, and we used cardboard to cover the windows and improve the lighting conditions.</p>
-        <h3>Bios</h3>
+
+        <h2>Results and Conclusions</h2>
+        <p>Our project achieved all the goals we set for it -- identifying a set and picking up the relevant cards. Further improvements would be to remove the human element of replacing cards, which is just a matter of adding more waypoints. Our initial design of the gripper used a suction cup instead of tape, which was not effective for grabbing cards. We also considered many white balancing algorithms, such as contrast stretching and grayworld assumption, but the k-means strategy worked the best.</p>
+        <p>In terms of difficulties, the main two that we ran into were glare caused by lights turned on in a room opposite from the lab and the gripper not reliably picking up cards with the original gripper. The solutions we came up with could be considered temporary — we used cardboard to cover the windows and improve the lighting conditions, and we used tape instead of a suction cup and a piece of foam.</p>
+        <p>Here is a video of the robot at work!</p>
+
+        <div align="middle">
+            <video height="400" controls>
+                <source src="images/demo.mp4" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+        </div>
+        
+        <h2>Team</h2>
         <ul>
             <li> Trinity Chung is hoping to one day make robots that will be able to assist humans with mobility impairments. She is a 4th year CS student. Trinity worked on the design for the gripper, including CADding it and getting it 3D printed. She went through a couple iterations before finding the working one that ended up on the final robot.</li>
             <li>Justin Im is a 4th year CS student with some background in robotics, mainly interested in computer vision and controls. He worked out and implemented the math the math for coordinate transform, as well as some white balancing algorithms that were scrapped.</li>
@@ -215,6 +235,9 @@
               </tr>
             </table>
         </div>
+
+        <h2>Additional Materials</h2>
+        <p>Everything was stored on Github! It can be found <a href="https://github.com/smartspot2/ee106a-final-project">here</a>.</p>
 </body>
 </html>
 
