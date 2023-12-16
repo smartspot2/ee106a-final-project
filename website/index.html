@@ -61,7 +61,7 @@
         <h3>Controller (<code>controller</code> node)</h3>
 
         <p>
-            The main role fo the controller (<code>src/set_robot/src/controller.py</code>) is to call the <code>vision</code> node to get card positions, then move the cards using the <code>sawyer_full_stack</code> node. A human interacts with the robot through the command line. The trajectories that it finds are reported through RViz and the human operator must confirm the safety of the trajectory before the robot can move. The general loop is as follows:
+            The main role for the controller (<code>src/set_robot/src/controller.py</code>) is to call the <code>vision</code> node to get card positions, then move the cards using the <code>sawyer_full_stack</code> node. A human interacts with the robot through the command line. The trajectories that it finds are reported through RViz and the human operator must confirm the safety of the trajectory before the robot can move. The general loop is as follows:
         </p>
         <ol>
             <li>Call the vision service and get the centers of cards in the AR tag's coordinate frame.</li>
@@ -80,8 +80,8 @@
         <br>
 
         <h3>Vision (<code>vision</code> node)</h3>
-
-        <p> The robot's first task is to find the set in the first place. It first takes an image of the set board using an external camera. The set board not only contains the cards, but also an AR tag needed for tranforming from the camera frame into the robot frame (not needed for training data). Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
+        <p>The launch file to boot up this node <code>vision.launch</code> starts the external camera (used for taking color pictures with higher quality than the wrist camera on the robot), the AR tag tracker, and sets constants such as the folder with the neural net, whether to use the neural net, and the number of the AR tag being used.</p>
+        <p>The robot's first task is to find the set in the first place. It first takes an image of the set board using an external camera. The set board not only contains the cards, but also an AR tag needed for tranforming from the camera frame into the robot frame (not needed for training data). Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
         <div align="middle">
             <table style="width:100%">
               <tr align="center">
@@ -207,6 +207,7 @@
         </div>
         
         <h3>Trajectory Planning (<code>sawyer_full_stack</code> node)</h3>
+        <p>The launch file to boot up this node <code>sawyer_full_stack.launch</code> starts Intera Interface, MoveIt, the AR tag tracking, and the tuck script. These are all derived from the labs. This allows us to use RVis, solve trajectories, and get the AR tag frame for frame transformation. The launch files for tracking the AR tag and tucking the robot from lab (<code>sawyer_camera_track.launch</code> and <code>custom_sawyer_tuck.launch</code>) are customized to our AR tag size and our custom tuck position.</p>
         <p>To plan motion, we took code from the labs and refactored it to receive commands from the controller node. This code calculates linear waypoints between the two points it is trying to move between and moves between these waypoints, error correcting using a PID controller. The service file to communicate with this node is shown below.</p>
         <div class="code-block">
             <code>
