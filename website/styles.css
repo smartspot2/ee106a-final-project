@@ -157,6 +157,10 @@ body {
   text-align: right;
 }
 
+.code-block {
+  padding-left: 30px;
+}
+
 @media (max-width: 1200px) {
   .hybrid-grid-columns {
     justify-content: unset;

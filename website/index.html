@@ -81,7 +81,7 @@
 
         <h3>Vision (<code>vision</code> node)</h3>
 
-        <p> The robot's first task is to find the set in the first place. It first takes an image of the set board. Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
+        <p> The robot's first task is to find the set in the first place. It first takes an image of the set board using an external camera. The set board not only contains the cards, but also an AR tag needed for tranforming from the camera frame into the robot frame (not needed for training data). Then, we use a Canny filter to find edges in the image. This produces a binary image we can then use to find contours. </p>
         <div align="middle">
             <table style="width:100%">
               <tr align="center">
@@ -163,7 +163,7 @@
             <li>128-channel block, downsampling</li>
             <li>256-channel block</li>
         </ul>
-        <p>We used a batch size of 65, initial learning rate of 0.0001, learning decay of 0.98, and 200 epochs.</p>
+        <p>We used a batch size of 65, initial learning rate of 0.0001, learning decay of 0.98, and 200 epochs. We also thresholded the confidence of our neural net to avoid classifying the AR tag or other potential rectangular objects in camera view.</p>
         <p>At this point, we have all the information we need except for the positions of the cards themselves. We compute this based on the information we have; that is, we know the camera intrinsics, the camera frame, the size of the AR tag, as well as the AR tag frame. A schematic is depicted below.</p>
         <div align="middle">
             <table style="width:100%">
@@ -179,13 +179,44 @@
         <div align="middle">
             $\vec{p} = \vec{o} + \vec{d} * \frac{(\vec{p_0} - \vec{o}) \cdot \vec{n}}{\vec{d} \cdot \vec{n}}$
         </div>
-        <p> Where $\vec{o}$ is origin of the ray, $\vec{d}$ is the direction, $\vec{p_0}$ is a point on the AR tag plane, and $\vec{n}$ is a unit vector normal to the plane. All calculations are done in the camera frame — we convert to the AR tag frame at the very end.</p>
+        <p> Where $\vec{o}$ is origin of the ray, $\vec{d}$ is the direction, $\vec{p_0}$ is a point on the AR tag plane, and $\vec{n}$ is a unit vector normal to the plane. All calculations are done in the camera frame — we convert to the AR tag frame at the very end and send this back.</p>
         
         <h3>Solving Set (<code>vision</code> node)</h3>
         <p>To solve set, we simply assign a value 1, 2, or 3 to each variation. For each possible set, if the sum of the values modulo 3 is 0, then we know it is a valid set. We repeat this for all permutations — this algorithm is constant time because there is an upper bound on the number of cards in play.</p>
+        <p>Once the set is solved, we send the coordinates of the cards in the set (in the reference frame of the AR tag) back to the controller. The service file to communicate with this node is shown below.</p>
+        <div class="code-block">
+            <code>
+                <h4>CardData.srv:</h4>
+
+                --- <br>
+                set_msgs/Card[] cards <br>
+                uint8[] set # length of 0 (no set found) or 3; indices of set <br>
+            </code>
+        </div>
+        
+        <p>Cards are represented by the card message with its position in the AR tage frame and the four values, as shown below.</p>
+        <div class="code-block">
+            <code>
+                <h4>Card.msg:</h4>
+                geometry_msgs/Point position # z = 0 <br>
+                uint8 shape <br>
+                uint8 color <br>
+                uint8 number <br>
+                uint8 shading
+            </code>
+        </div>
         
         <h3>Trajectory Planning (<code>sawyer_full_stack</code> node)</h3>
-        To plan motion, we took code from the labs and refactored it to receive commands from the controller node. This code calculates linear waypoints between the two points it is trying to move between and moves between these waypoints, error correcting using a PID controller.
+        <p>To plan motion, we took code from the labs and refactored it to receive commands from the controller node. This code calculates linear waypoints between the two points it is trying to move between and moves between these waypoints, error correcting using a PID controller. The service file to communicate with this node is shown below.</p>
+        <div class="code-block">
+            <code>
+                <h4>TargetPosition.srv:</h4>
+                geometry_msgs/Point position # length of 3 <br>
+                bool use_ar_frame <br>
+                --- <br>
+                string status
+            </code>
+        </div>
 
         <h3>Manipulation</h3>
         <p>Picking up cards with the regular Sawyer gripper is infeasible — we designed a custom gripper of our own.</p>
