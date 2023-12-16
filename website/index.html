@@ -30,9 +30,12 @@
 <br />
 <h1 align="middle">Group 27 — Set</h1>
     <div class="padded">
-
+        <h2>Introduction</h2>
         <h3>Overview</h3>
-        Our goal is to make the Sawyers play a game of set. The robot will be able to accurately detect cards, find a set, and pick and place the cards that it finds.
+        <p>Our goal is to make the Sawyers play a game of set. We're interested in this project because it heavily relies on computer vision and extrapolating information from an image to determine real-world coordinate with less assistance from the AR tags as compared to labs. The robot will be able to accurately detect cards, find a set, and pick and place the cards that it finds. Real-world robotics often combines computer vision, path planning, and custom hardware to automate work and perform tasks faster than a human can, just like our project does with Set.
+        </p>
+
+
 
         <div align="middle">
             <video height="400" controls>
@@ -41,6 +44,7 @@
             </video>
         </div>
 
+        <h2>Design</h2>
         <h3>Architecture</h3>
 
        
@@ -55,6 +59,7 @@
         <p>The <code>set_robot</code> node acts as a controller. It runs the game loop, and calls services that operate each module of the robot. The vision node processes the image obtained by the camera, isolates the cards in the image, then cleans and processes them. It then returns  the coordinates of the centers of each card in the set in AR tag coordinates. <code>sawyer_full_stack</code> is responsible for providing sevices involving path planning and trajectories.</p>
 
 
+        <h2>Implementation</h2>
         <h3>Controller</h3>
 
         <p>
@@ -185,7 +190,7 @@
         <p>The gripper was designed in Blender and 3D printed. The smaller piece has a piece of tape attached to the end, allowing the card to stick to it. When we want to drop a card, we move the gripper to the closed position so that the wings on the other piece of the gripper push down on and release the card from the tape.</p>
         <h3>Solving Set</h3>
         <p>To solve set, we simply assign a value 1, 2, or 3 to each variation. For each possible set, if the sum of the values modulo 3 is 0, then we know it is a valid set. We repeat this for all permutations — this algorithm is constant time because there is an upper bound on the number of cards in play.</p>
-        <h3>Results</h3>
+        <h2>Results</h2>
         <p>Our project achieved all the goals we set for it. Further improvements would be to remove the human element of replacing cards, which is just a matter of adding more waypoints. Our initial design of the gripper used a suction cup instead of tape, which was not effective for grabbing cards. We also considered many white balancing algorithms, such as contrast stretching and grayworld assumption, but the k-means strategy worked the best.</p>
         <p>In terms of difficulties, the main two that we ran into were glare caused by lights turned on in a room opposite from the lab and the gripper not reliably picking up cards with the original gripper. The solutions we came up with could be considered temporary — we used tape instead of a suction cup and piece of foam, and we used cardboard to cover the windows and improve the lighting conditions.</p>
         <h3>Bios</h3>
